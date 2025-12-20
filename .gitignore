@@ -1,0 +1,40 @@
+# deps
+node_modules/
+bot/node_modules/
+
+# wrangler
+.wrangler/
+bot/.wrangler/
+.dev.vars
+bot/.dev.vars
+bot/secrets-tmp.json
+secrets.json
+
+# env / secrets
+.env
+.env.*
+*.pem
+*.key
+bot/.dev.vars - Copy.example
+!bot/.dev.vars.example
+
+# logs
+npm-debug.log*
+wrangler.log
+.cloudflare/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# build / screenshots (keep optional)
+# gui-test-screenshots/
+
+# keep wrangler state local
+.wrangler/state/
