@@ -1,0 +1,14 @@
+{
+  "name": "foodlog-telegram-bot",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "setup:webhook": "node scripts/setup-webhook.mjs",
+    "dev:poll": "node scripts/dev-poll.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "latest"
+  }
+}
