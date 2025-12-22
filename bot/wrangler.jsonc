@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "foodlog-telegram-bot",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "FOODLOG_API_BASE": "https://foodlog.hessam2.workers.dev"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "BOT_KV",
+      "id": "bd7d87c4ca9641459e08eb452f954d48",
+      "preview_id": "bea1d6fc027f498490c9a0c959048d53"
+    }
+  ],
+  "services": [
+    {
+      "binding": "FOODLOG",
+      "service": "foodlog"
+    }
+  ],
+  "observability": { "enabled": true }
+}
