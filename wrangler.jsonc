@@ -1,0 +1,17 @@
+{
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  "name": "foodlog",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-07-01",
+  "assets": {
+    "directory": "./public",
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    {
+      "binding": "FOODLOG_DB",
+      "database_name": "foodlog",
+      "database_id": "6f0473b4-b49f-4770-bf05-b50cb68f48dd"
+    }
+  ]
+}
