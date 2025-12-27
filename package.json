@@ -1,0 +1,20 @@
+{
+  "name": "foodlog",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node scripts/api-test.mjs",
+    "test:gui": "node scripts/gui-test.mjs",
+    "test:join": "node scripts/join-test.mjs",
+    "test:fa": "node scripts/fa-theme-test.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.62.1",
+    "wrangler": "latest"
+  },
+  "dependencies": {
+    "vazirmatn": "^33.0.3"
+  }
+}
