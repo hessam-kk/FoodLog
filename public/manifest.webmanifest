@@ -1,0 +1,17 @@
+{
+  "name": "FoodLog",
+  "short_name": "FoodLog",
+  "description": "Family lunch & dinner log with votes and weekly stats",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f2ea",
+  "theme_color": "#e8553f",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
