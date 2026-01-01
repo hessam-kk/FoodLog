@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>FoodLog · Family meals</title>
+  <meta name="description" content="Log family lunches and dinners, vote on your favorite foods, and watch your food story unfold week by week.">
+  <meta name="theme-color" id="meta-theme" content="#f7f2ea">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg">
+  <link rel="apple-touch-icon" href="/icon.svg">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="stylesheet" href="/styles.css">
+  <script>
+    // Apply saved language / theme before first paint to avoid a flash.
+    try {
+      var lang = localStorage.getItem('foodlog.lang');
+      if (!lang) lang = (navigator.language || '').toLowerCase().startsWith('fa') ? 'fa' : 'en';
+      document.documentElement.lang = lang;
+      document.documentElement.dir = lang === 'fa' ? 'rtl' : 'ltr';
+      var theme = localStorage.getItem('foodlog.theme') || 'system';
+      var dark = theme === 'dark' ||
+        (theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    } catch (e) { /* first visit defaults */ }
+  </script>
+</head>
+<body>
+  <div id="app">
+    <div class="boot-splash"><div class="boot-logo">🍲</div></div>
+  </div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
