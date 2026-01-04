@@ -31,20 +31,25 @@ export function weekDates(anchor, weekStart) {
   return Array.from({ length: 7 }, (_, i) => addDays(start, i));
 }
 
-export function weekRangeLabel(anchor, weekStart) {
+export function weekRangeLabel(anchor, weekStart, lang = 'fa') {
   const dates = weekDates(anchor, weekStart);
   const a = dates[0], b = dates[6];
-  // short e.g. "12 Aug — 18 Aug"
-  const fmt = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' });
+  const loc = lang === 'fa' ? 'fa-IR' : 'en';
+  const fmt = new Intl.DateTimeFormat(loc, { month: 'short', day: 'numeric' });
   return `${fmt.format(parseDate(a))} — ${fmt.format(parseDate(b))}`;
 }
 
-export function dayLabel(date) {
+export function dayLabel(date, lang = 'fa') {
   const d = parseDate(date);
-  // e.g. Mon 12
-  const dow = new Intl.DateTimeFormat('en', { weekday: 'short' }).format(d);
-  const day = new Intl.DateTimeFormat('en', { day: 'numeric' }).format(d);
+  const loc = lang === 'fa' ? 'fa-IR' : 'en';
+  const dow = new Intl.DateTimeFormat(loc, { weekday: 'short' }).format(d);
+  const day = new Intl.DateTimeFormat(loc, { day: 'numeric' }).format(d);
   return `${dow} ${day}`;
+}
+
+export function slotLabel(slot, lang = 'fa') {
+  if (lang === 'fa') return slot === 'lunch' ? 'ناهار' : 'شام';
+  return slot;
 }
 
 export function slotIcon(slot) {
