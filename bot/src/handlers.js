@@ -1,9 +1,10 @@
 import { getChat, putChat, updateChat, getSession, putSession, clearSession } from './store.js';
 import * as foodlog from './foodlog.js';
 import * as tg from './telegram.js';
-import { weekKeyboard, slotKeyboard, foodPickerKeyboard, whoamiKeyboard, foodsListKeyboard } from './keyboards.js';
+import { weekKeyboard, slotKeyboard, foodPickerKeyboard, whoamiKeyboard, foodsListKeyboard, langKeyboard } from './keyboards.js';
 import { weekMessageText, slotDetailText, foodPickerIntro, helpText } from './format.js';
-import { todayStr, weekDates, htmlEsc } from './util.js';
+import { todayStr, htmlEsc } from './util.js';
+import { t, getLangFromChat, normalizeLang } from './i18n.js';
 
 // ---------- helpers ----------
 
@@ -14,18 +15,19 @@ async function ensureFamily(env, chatId) {
     const family = await foodlog.getFamily(env, chat.familyCode);
     return { chat, family };
   } catch (e) {
-    // Family code invalid (maybe deleted). Tell user.
     return { chat, family: null, error: e.message };
   }
 }
 
+function langOf(chat) {
+  return getLangFromChat(chat);
+}
+
 async function showWeek(env, chatId, anchorOverride) {
   const chat = await getChat(env, chatId);
+  const lang = langOf(chat);
   if (!chat || !chat.familyCode) {
-    await tg.sendMessage(env, chatId,
-      `👋 Welcome to <b>FoodLog</b>!\n\nThis chat isn't linked yet.\nSend your <b>6-character family code</b> (e.g. <code>K7TM3P</code>) or use <code>/start CODE</code>.\nYou can find the code in the FoodLog app under Family.`,
-      { reply_markup: undefined });
-    // Put into await_code state so a plain code message will link.
+    await tg.sendMessage(env, chatId, t(lang, 'needCode'), { reply_markup: undefined });
     await putSession(env, chatId, { step: 'await_code' });
     return;
   }
@@ -33,14 +35,13 @@ async function showWeek(env, chatId, anchorOverride) {
   try {
     family = await foodlog.getFamily(env, chat.familyCode);
   } catch (e) {
-    await tg.sendMessage(env, chatId, `⚠️ Couldn't load family <code>${htmlEsc(chat.familyCode)}</code>: ${htmlEsc(e.message)}\nSend a new code with <code>/start CODE</code> or tap /help.`);
+    await tg.sendMessage(env, chatId, t(lang, 'familyLoadFail', { code: htmlEsc(chat.familyCode), err: htmlEsc(e.message) }));
     return;
   }
   const anchor = anchorOverride || chat.weekAnchor || todayStr();
-  // Persist anchor so Back buttons return to the same week
   await updateChat(env, chatId, { weekAnchor: anchor });
-  const text = weekMessageText(family, anchor);
-  const kb = weekKeyboard(family, anchor);
+  const text = weekMessageText(family, anchor, lang);
+  const kb = weekKeyboard(family, anchor, lang);
   await tg.sendMessage(env, chatId, text, { reply_markup: kb });
 }
 
@@ -51,12 +52,13 @@ async function showWhoami(env, chatId) {
     return;
   }
   const { family, chat } = res;
+  const lang = langOf(chat);
   const current = chat.memberId ? family.members.find((m) => m.id === chat.memberId) : null;
-  let txt = `👤 <b>Who are you?</b>\n`;
-  if (current) txt += `Currently: ${current.emoji} <b>${htmlEsc(current.name)}</b> — tap another to switch.\n`;
-  else txt += `Pick your member — votes will be recorded under that name.\n`;
-  txt += `\n<i>Members in ${htmlEsc(family.name)}:</i>`;
-  const kb = whoamiKeyboard(family);
+  let txt = t(lang, 'whoPick') + '\n';
+  if (current) txt += t(lang, 'whoCurrent', { who: `${current.emoji} ${current.name}` }) + '\n';
+  else txt += t(lang, 'whoNeed') + '\n';
+  txt += `\n${t(lang, 'whoMembers', { family: htmlEsc(family.name) })}`;
+  const kb = whoamiKeyboard(family, lang);
   await tg.sendMessage(env, chatId, txt, { reply_markup: kb });
 }
 
@@ -66,22 +68,27 @@ async function showFoods(env, chatId) {
     await showWeek(env, chatId);
     return;
   }
-  const { family } = res;
+  const { family, chat } = res;
+  const lang = langOf(chat);
   if (!family.foods.length) {
-    await tg.sendMessage(env, chatId,
-      `📖 <b>Food memory is empty</b>\nFoods you log will be remembered here.\n\nSend a food name to add it, e.g. “<i>ghormeh sabzi</i>”.`,
-      { reply_markup: foodsListKeyboard() });
+    await tg.sendMessage(env, chatId, t(lang, 'foodsTitleEmpty'), { reply_markup: foodsListKeyboard(lang) });
     await putSession(env, chatId, { step: 'await_food_text' });
     return;
   }
-  // List top foods by uses (limit to 20 for readability)
   const top = [...family.foods].sort((a, b) => b.uses - a.uses).slice(0, 25);
-  let txt = `📖 <b>Food memory — ${family.foods.length} foods</b>\n`;
-  txt += top.map((f) => `• ${htmlEsc(f.name)} — used ${f.uses}×`).join('\n');
-  if (family.foods.length > 25) txt += `\n<i>…and ${family.foods.length - 25} more</i>`;
-  txt += `\n\nSend a food name to add it, or tap Week to go back.`;
-  await tg.sendMessage(env, chatId, txt, { reply_markup: foodsListKeyboard() });
+  let txt = t(lang, 'foodsTitle', { n: String(family.foods.length) }) + '\n';
+  txt += top.map((f) => `• ${htmlEsc(f.name)} — ${f.uses}×`).join('\n');
+  if (family.foods.length > 25) txt += `\n${t(lang, 'foodsMore', { n: String(family.foods.length - 25) })}`;
+  txt += t(lang, 'foodsHint');
+  await tg.sendMessage(env, chatId, txt, { reply_markup: foodsListKeyboard(lang) });
   await putSession(env, chatId, { step: 'await_food_text' });
+}
+
+async function showLangPicker(env, chatId) {
+  const chat = await getChat(env, chatId);
+  const lang = langOf(chat);
+  const cur = lang === 'fa' ? t(lang, 'currentLangFa') : t(lang, 'currentLangEn');
+  await tg.sendMessage(env, chatId, `${t(lang, 'langPick')} (${cur})`, { reply_markup: langKeyboard() });
 }
 
 // ---------- message handler ----------
@@ -91,86 +98,99 @@ export async function handleMessage(env, msg) {
   const textRaw = (msg.text || '').trim();
   const text = textRaw;
   let session = await getSession(env, chatId);
+  let chatForLang = await getChat(env, chatId);
+  const lang = langOf(chatForLang);
 
-  // Session: awaiting family code (from /start without arg or welcome)
+  // language switch via text? handle /lang first before sessions so it can cancel
+  if (text.startsWith('/lang') || text.startsWith('/language') || text.startsWith('/زبان')) {
+    const parts = text.split(/\s+/);
+    const arg = normalizeLang(parts[1] || '');
+    if (arg === 'fa' || arg === 'en') {
+      await updateChat(env, chatId, { lang: arg });
+      await tg.sendMessage(env, chatId, arg === 'fa' ? t('fa', 'langSwitchedFa') : t('en', 'langSwitchedEn'));
+      await clearSession(env, chatId);
+      // refresh week in new lang if linked
+      const c = await getChat(env, chatId);
+      if (c && c.familyCode) await showWeek(env, chatId);
+      return;
+    }
+    await clearSession(env, chatId);
+    await showLangPicker(env, chatId);
+    return;
+  }
+
+  // Session: awaiting family code
   if (session && session.step === 'await_code') {
     const code = text.toUpperCase().replace(/\s+/g, '');
     if (!/^[A-Z0-9]{6}$/.test(code)) {
-      await tg.sendMessage(env, chatId, `That doesn't look like a 6-character code. Try again (e.g. <code>K7TM3P</code>), or use <code>/start CODE</code>.`);
+      await tg.sendMessage(env, chatId, t(lang, 'badCode'));
       return;
     }
     try {
       const family = await foodlog.getFamily(env, code);
-      await putChat(env, chatId, { familyCode: family.id, memberId: null, memberName: null, weekAnchor: todayStr() });
+      await putChat(env, chatId, { familyCode: family.id, memberId: null, memberName: null, weekAnchor: todayStr(), lang: lang });
       await clearSession(env, chatId);
-      await tg.sendMessage(env, chatId, `✅ Linked to <b>${htmlEsc(family.name)}</b> (<code>${family.id}</code>) — ${family.members.length} members, ${family.foods.length} foods.`);
-      // Prompt whoami
+      await tg.sendMessage(env, chatId, t(lang, 'linkedInfo', { name: htmlEsc(family.name), id: family.id, members: String(family.members.length), foods: String(family.foods.length) }));
       await showWhoami(env, chatId);
       await showWeek(env, chatId, todayStr());
     } catch (e) {
-      await tg.sendMessage(env, chatId, `⚠️ ${htmlEsc(e.message)}\nDouble-check the code and try again.`);
+      await tg.sendMessage(env, chatId, `⚠️ ${htmlEsc(e.message)}`);
     }
     return;
   }
 
-  // Session: awaiting new food name during meal picker (typed manually)
+  // Session: awaiting new food name during meal picker
   if (session && session.step === 'await_new_food_picker') {
     const name = text.trim();
     if (!name || name.startsWith('/')) {
-      await tg.sendMessage(env, chatId, `Please send a food name, or use /help to cancel.`);
+      await tg.sendMessage(env, chatId, t(lang, 'sendFoodName'));
       return;
     }
     const res = await ensureFamily(env, chatId);
     if (!res || !res.family) { await clearSession(env, chatId); return; }
+    const curLang = langOf(res.chat);
     try {
-      // Persist new food to memory, then select it
       const updated = await foodlog.addFood(env, res.chat.familyCode, name);
       const created = updated.foods.find((f) => f.name.toLowerCase() === name.toLowerCase()) || updated.foods[0];
-      // Restore picker session, adding this food id
       const newSelected = [...(session.selectedIds || [])];
       if (created && !newSelected.includes(created.id)) {
         if (newSelected.length >= 8) {
-          await tg.sendMessage(env, chatId, `⚠️ A meal can have at most 8 foods. Added “${htmlEsc(name)}” to memory but not auto-selected — deselect one first.`);
+          await tg.sendMessage(env, chatId, t(curLang, 'addedButFull', { name: htmlEsc(name) }));
         } else {
           newSelected.push(created.id);
         }
       }
       const nextSession = { step: 'pick_foods', date: session.date, slot: session.slot, selectedIds: newSelected, page: session.page || 0, anchor: session.anchor };
       await putSession(env, chatId, nextSession);
-      await tg.sendMessage(env, chatId,
-        `✅ Added “${htmlEsc(name)}” to memory.`,
-      );
-      // Re-show picker as a new message with updated family
+      await tg.sendMessage(env, chatId, t(curLang, 'addedMemory', { name: htmlEsc(name) }));
       const fam2 = updated;
-      const intro = foodPickerIntro(session.date, session.slot, fam2);
-      const kb = foodPickerKeyboard(fam2, nextSession);
+      const intro = foodPickerIntro(session.date, session.slot, fam2, curLang);
+      const kb = foodPickerKeyboard(fam2, nextSession, curLang);
       await tg.sendMessage(env, chatId, intro, { reply_markup: kb });
     } catch (e) {
-      await tg.sendMessage(env, chatId, `⚠️ Couldn't add food: ${htmlEsc(e.message)}`);
+      await tg.sendMessage(env, chatId, `⚠️ ${htmlEsc(e.message)}`);
     }
     return;
   }
 
   // Session: awaiting food name via /foods list
   if (session && session.step === 'await_food_text') {
-    // Allow "cancel" keywords
     if (text.toLowerCase() === 'cancel' || text === '✕ Cancel' || text.startsWith('/')) {
       await clearSession(env, chatId);
-      // fall through to command handling
+      // fall through
     } else {
       const name = text.trim();
       if (!name) {
-        await tg.sendMessage(env, chatId, `Please send a food name, or type /help.`);
+        await tg.sendMessage(env, chatId, t(lang, 'sendFoodName'));
         return;
       }
       const res = await ensureFamily(env, chatId);
       if (!res || !res.family) { await clearSession(env, chatId); return; }
+      const curLang = langOf(res.chat);
       try {
-        const updated = await foodlog.addFood(env, res.chat.familyCode, name);
-        await tg.sendMessage(env, chatId, `✅ “${htmlEsc(name)}” added to food memory 📖`);
-        // Keep session open for more adds, or clear? Keep open for convenience.
-        await tg.sendMessage(env, chatId, `Send another food name, or tap /week to see the week view.`);
-        // Don't clear — allow multiple adds
+        await foodlog.addFood(env, res.chat.familyCode, name);
+        await tg.sendMessage(env, chatId, t(curLang, 'addedMemory', { name: htmlEsc(name) }) + ' 📖');
+        await tg.sendMessage(env, chatId, t(curLang, 'sendAnother'));
       } catch (e) {
         await tg.sendMessage(env, chatId, `⚠️ ${htmlEsc(e.message)}`);
       }
@@ -184,41 +204,42 @@ export async function handleMessage(env, msg) {
     const arg = (parts[1] || '').toUpperCase().trim();
     if (arg) {
       if (!/^[A-Z0-9]{6}$/.test(arg)) {
-        await tg.sendMessage(env, chatId, `Usage: <code>/start CODE</code> — e.g. <code>/start K7TM3P</code>\nOr just send the 6-character code.`);
+        await tg.sendMessage(env, chatId, t(lang, 'badCodeArg'));
         return;
       }
       try {
         const family = await foodlog.getFamily(env, arg);
-        await putChat(env, chatId, { familyCode: family.id, memberId: null, memberName: null, weekAnchor: todayStr() });
+        const existing = await getChat(env, chatId);
+        await putChat(env, chatId, { familyCode: family.id, memberId: null, memberName: null, weekAnchor: todayStr(), lang: langOf(existing) });
         await clearSession(env, chatId);
-        await tg.sendMessage(env, chatId, `✅ Linked to <b>${htmlEsc(family.name)}</b> (<code>${family.id}</code>).`);
+        await tg.sendMessage(env, chatId, t(lang, 'linked', { name: htmlEsc(family.name), id: family.id }));
         await showWhoami(env, chatId);
         await showWeek(env, chatId, todayStr());
       } catch (e) {
         await tg.sendMessage(env, chatId, `⚠️ ${htmlEsc(e.message)}`);
       }
     } else {
-      // No arg — show linkage prompt + current week if already linked
       const chat = await getChat(env, chatId);
+      const curLang = langOf(chat);
       if (chat && chat.familyCode) {
-        await tg.sendMessage(env, chatId, `Linked to <code>${htmlEsc(chat.familyCode)}</code>. Use <code>/start CODE</code> to switch family, or tap below.`);
+        await tg.sendMessage(env, chatId, `Linked to <code>${htmlEsc(chat.familyCode)}</code>. Use <code>/start CODE</code> to switch.`);
         await showWeek(env, chatId);
       } else {
-        await tg.sendMessage(env, chatId, `👋 Send your <b>6-character family code</b> (e.g. <code>K7TM3P</code>) or use <code>/start CODE</code>.\nFind it in the FoodLog app → Family.`);
+        await tg.sendMessage(env, chatId, t(curLang, 'needCode'));
         await putSession(env, chatId, { step: 'await_code' });
       }
     }
     return;
   }
 
-  if (text.startsWith('/week') || text.startsWith('/meals')) {
+  if (text.startsWith('/week') || text.startsWith('/meals') || text.startsWith('/هفته')) {
     await clearSession(env, chatId);
     await showWeek(env, chatId);
     return;
   }
 
-  if (text.startsWith('/help')) {
-    await tg.sendMessage(env, chatId, helpText());
+  if (text.startsWith('/help') || text.startsWith('/راهنما')) {
+    await tg.sendMessage(env, chatId, helpText(lang));
     return;
   }
 
@@ -227,7 +248,7 @@ export async function handleMessage(env, msg) {
     return;
   }
 
-  if (text.startsWith('/foods') || text.startsWith('/food')) {
+  if (text.startsWith('/foods') || text.startsWith('/food') || text.startsWith('/غذا')) {
     await showFoods(env, chatId);
     return;
   }
@@ -237,9 +258,10 @@ export async function handleMessage(env, msg) {
     const code = text.trim().toUpperCase();
     try {
       const family = await foodlog.getFamily(env, code);
-      await putChat(env, chatId, { familyCode: family.id, memberId: null, memberName: null, weekAnchor: todayStr() });
+      const existing = await getChat(env, chatId);
+      await putChat(env, chatId, { familyCode: family.id, memberId: null, memberName: null, weekAnchor: todayStr(), lang: langOf(existing) });
       await clearSession(env, chatId);
-      await tg.sendMessage(env, chatId, `✅ Linked to <b>${htmlEsc(family.name)}</b> (<code>${family.id}</code>).`);
+      await tg.sendMessage(env, chatId, t(lang, 'linked', { name: htmlEsc(family.name), id: family.id }));
       await showWhoami(env, chatId);
       await showWeek(env, chatId, todayStr());
     } catch (e) {
@@ -248,12 +270,13 @@ export async function handleMessage(env, msg) {
     return;
   }
 
-  // Fallback: show help hint or week
+  // Fallback
   const chat = await getChat(env, chatId);
+  const curLang = langOf(chat);
   if (!chat || !chat.familyCode) {
-    await tg.sendMessage(env, chatId, `Send your family code or use <code>/start CODE</code>. Try /help for commands.`);
+    await tg.sendMessage(env, chatId, t(curLang, 'needCode'));
   } else {
-    await tg.sendMessage(env, chatId, `I didn't understand that. Try /week to see meals, or /help for all commands.`);
+    await tg.sendMessage(env, chatId, t(curLang, 'helpFallback'));
   }
 }
 
@@ -264,16 +287,26 @@ export async function handleCallback(env, cb) {
   const messageId = cb.message.message_id;
   const data = cb.data || '';
   const callbackId = cb.id;
+  const chatForLang = await getChat(env, chatId);
+  const lang = langOf(chatForLang);
 
-  // Always answer quickly to remove spinner; we may answer with text later.
   const answer = (opts) => tg.answerCallback(env, callbackId, opts).catch(() => {});
 
-  // Quick noop
   if (data === 'noop') { await answer(); return; }
 
-  // Footer quick actions
+  // language switch
+  if (data.startsWith('lang:')) {
+    const newLang = normalizeLang(data.slice(5));
+    await updateChat(env, chatId, { lang: newLang });
+    try { await tg.editMessage(env, chatId, messageId, newLang === 'fa' ? t('fa','langSwitchedFa') : t('en','langSwitchedEn'), undefined); } catch {}
+    await answer({ text: newLang === 'fa' ? 'فارسی' : 'English' });
+    const c = await getChat(env, chatId);
+    if (c && c.familyCode) await showWeek(env, chatId, c.weekAnchor || todayStr());
+    return;
+  }
+
   if (data === 'act:help') {
-    await tg.sendMessage(env, chatId, helpText());
+    await tg.sendMessage(env, chatId, helpText(lang));
     await answer();
     return;
   }
@@ -288,18 +321,17 @@ export async function handleCallback(env, cb) {
     return;
   }
 
-  // Week navigation: nav:YYYY-MM-DD
   if (data.startsWith('nav:')) {
     const anchor = data.slice(4);
-    // anchor should be YYYY-MM-DD; fallback to today if malformed
     const safe = /^\d{4}-\d{2}-\d{2}$/.test(anchor) ? anchor : todayStr();
     const chat = await getChat(env, chatId);
-    if (!chat || !chat.familyCode) { await answer({ text: 'Link a family first: /start CODE', show_alert: true }); return; }
+    const curLang = langOf(chat);
+    if (!chat || !chat.familyCode) { await answer({ text: t(curLang, 'needFamily'), show_alert: true }); return; }
     try {
       const family = await foodlog.getFamily(env, chat.familyCode);
       await updateChat(env, chatId, { weekAnchor: safe });
-      const text = weekMessageText(family, safe);
-      const kb = weekKeyboard(family, safe);
+      const text = weekMessageText(family, safe, curLang);
+      const kb = weekKeyboard(family, safe, curLang);
       await tg.editMessage(env, chatId, messageId, text, kb);
       await answer();
     } catch (e) {
@@ -308,112 +340,106 @@ export async function handleCallback(env, cb) {
     return;
   }
 
-  // Slot tap: slot:YYYY-MM-DD:slot
   if (data.startsWith('slot:')) {
-    const parts = data.split(':'); // ['slot','2024-08-12','lunch']
+    const parts = data.split(':');
     if (parts.length !== 3) { await answer(); return; }
     const date = parts[1];
     const slot = parts[2];
     const res = await ensureFamily(env, chatId);
-    if (!res || !res.family) { await answer({ text: 'Link a family first', show_alert: true }); return; }
+    if (!res || !res.family) { await answer({ text: t(lang, 'needFamily'), show_alert: true }); return; }
     const { family, chat } = res;
+    const curLang = langOf(chat);
     const anchor = chat.weekAnchor || date;
-    const txt = slotDetailText(family, date, slot, chat.memberId);
-    const kb = slotKeyboard(family, date, slot, anchor);
+    const txt = slotDetailText(family, date, slot, chat.memberId, curLang);
+    const kb = slotKeyboard(family, date, slot, anchor, curLang);
     await tg.sendMessage(env, chatId, txt, { reply_markup: kb });
     await answer();
     return;
   }
 
-  // Start add/edit: add:DATE:slot
   if (data.startsWith('add:')) {
     const parts = data.split(':');
     if (parts.length !== 3) { await answer(); return; }
     const date = parts[1];
     const slot = parts[2];
     const res = await ensureFamily(env, chatId);
-    if (!res || !res.family) { await answer({ text: 'Link a family first', show_alert: true }); return; }
+    if (!res || !res.family) { await answer({ text: t(lang, 'needFamily'), show_alert: true }); return; }
     const { family, chat } = res;
+    const curLang = langOf(chat);
     const meal = (family.meals[date] || {})[slot];
     const selected = meal ? meal.items.map((it) => it.id) : [];
     const session = { step: 'pick_foods', date, slot, selectedIds: selected, page: 0, anchor: chat.weekAnchor || date };
     await putSession(env, chatId, session);
-    const intro = foodPickerIntro(date, slot, family);
-    const kb = foodPickerKeyboard(family, session);
+    const intro = foodPickerIntro(date, slot, family, curLang);
+    const kb = foodPickerKeyboard(family, session, curLang);
     await tg.sendMessage(env, chatId, intro, { reply_markup: kb });
     await answer();
     return;
   }
 
-  // Food picker: pick:...
   if (data.startsWith('pick:')) {
     const sub = data.slice(5);
     let session = await getSession(env, chatId);
     if (!session || session.step !== 'pick_foods') {
-      await answer({ text: 'This picker has expired — tap the slot again.', show_alert: true });
+      await answer({ text: t(lang, 'pickerExpired'), show_alert: true });
       return;
     }
     const res = await ensureFamily(env, chatId);
-    if (!res || !res.family) { await answer({ text: 'Family not found', show_alert: true }); return; }
+    if (!res || !res.family) { await answer({ text: t(lang, 'familyLoadFail', { code: '', err: '' }), show_alert: true }); return; }
     let family = res.family;
+    const curLang = langOf(res.chat);
     const date = session.date;
     const slot = session.slot;
 
     if (sub === 'done') {
       if (!session.selectedIds || !session.selectedIds.length) {
-        await answer({ text: 'Pick at least one food first.', show_alert: true });
+        await answer({ text: t(curLang, 'needPick'), show_alert: true });
         return;
       }
-      // Resolve items (id + name). New foods created via await_new_food_picker have already been added.
       const items = [];
       for (const id of session.selectedIds) {
         let f = family.foods.find((x) => x.id === id);
         if (!f) {
-          // Maybe it's a food that was just created but family is stale — refetch?
           try { family = await foodlog.getFamily(env, res.chat.familyCode); f = family.foods.find((x) => x.id === id); } catch {}
         }
         if (f) items.push({ id: f.id, name: f.name });
         else {
-          // Fallback: try from current meal items snapshot
           const m = (res.family.meals[date] || {})[slot];
           const it = m && m.items.find((x) => x.id === id);
           if (it) items.push({ id: it.id, name: it.name });
         }
       }
       if (!items.length) {
-        await answer({ text: 'No valid foods selected.', show_alert: true });
+        await answer({ text: t(curLang, 'needPick'), show_alert: true });
         return;
       }
       try {
         const updated = await foodlog.setMeal(env, res.chat.familyCode, date, slot, items, res.chat.memberId || undefined);
         await clearSession(env, chatId);
-        // Try to edit the picker message to confirm
-        const confirmText = `✅ Saved <b>${htmlEsc(date)} ${slot}</b>: ${items.map((it) => htmlEsc(it.name)).join(' + ')}`;
+        const confirmText = t(curLang, 'saved', { date, slot: slot === 'lunch' ? t(curLang,'lunch') : t(curLang,'dinner'), items: items.map((it) => htmlEsc(it.name)).join(' + ') });
         try { await tg.editMessage(env, chatId, messageId, confirmText, undefined); } catch { await tg.sendMessage(env, chatId, confirmText); }
-        await answer({ text: 'Meal saved ✓' });
-        // Also send updated slot detail so voting can begin immediately
-        const txt = slotDetailText(updated, date, slot, res.chat.memberId);
-        const kb = slotKeyboard(updated, date, slot, session.anchor || date);
+        await answer({ text: curLang === 'fa' ? 'ذخیره شد ✓' : 'Meal saved ✓' });
+        const txt = slotDetailText(updated, date, slot, res.chat.memberId, curLang);
+        const kb = slotKeyboard(updated, date, slot, session.anchor || date, curLang);
         await tg.sendMessage(env, chatId, txt, { reply_markup: kb });
       } catch (e) {
         await answer({ text: e.message.slice(0, 200), show_alert: true });
-        await tg.sendMessage(env, chatId, `⚠️ Couldn't save meal: ${htmlEsc(e.message)}`);
+        await tg.sendMessage(env, chatId, `${t(curLang,'saveFail', { err: htmlEsc(e.message) })}`);
       }
       return;
     }
 
     if (sub === 'cancel') {
       await clearSession(env, chatId);
-      try { await tg.editMessage(env, chatId, messageId, `✕ Cancelled.`, undefined); } catch {}
-      await tg.sendMessage(env, chatId, `Cancelled. Tap a slot button from the week view to try again.`);
+      try { await tg.editMessage(env, chatId, messageId, t(curLang, 'cancelled'), undefined); } catch {}
+      await tg.sendMessage(env, chatId, t(curLang, 'cancelledHint'));
       await answer();
       return;
     }
 
     if (sub === 'new') {
-      // Switch session to await text input for new food
       await putSession(env, chatId, { ...session, step: 'await_new_food_picker' });
-      await tg.sendMessage(env, chatId, `Send the <b>new food name</b> (e.g. <i>kebab</i>). The picker will re-appear after.`);
+      await tg.sendMessage(env, chatId, t(curLang, 'sendNewFood'));
       await answer();
       return;
     }
@@ -423,90 +449,86 @@ export async function handleCallback(env, cb) {
       if (Number.isNaN(page)) { await answer(); return; }
       const next = { ...session, page };
       await putSession(env, chatId, next);
-      const kb = foodPickerKeyboard(family, next);
-      const intro = foodPickerIntro(date, slot, family);
+      const kb = foodPickerKeyboard(family, next, curLang);
+      const intro = foodPickerIntro(date, slot, family, curLang);
       try { await tg.editMessage(env, chatId, messageId, intro, kb); } catch {}
       await answer();
       return;
     }
 
-    // Otherwise it's a food id toggle
     const foodId = sub;
-    // Verify id exists in foods or current meal
     const exists = family.foods.some((f) => f.id === foodId) || ((family.meals[date] || {})[slot] && family.meals[date][slot].items.some((it) => it.id === foodId));
     if (!exists) {
-      await answer({ text: 'Food not found (maybe removed).', show_alert: true });
+      await answer({ text: t(curLang, 'invalidFood'), show_alert: true });
       return;
     }
     let selected = [...(session.selectedIds || [])];
     if (selected.includes(foodId)) selected = selected.filter((x) => x !== foodId);
     else {
       if (selected.length >= 8) {
-        await answer({ text: 'A meal can have at most 8 foods.', show_alert: true });
+        await answer({ text: t(curLang, 'maxFoods'), show_alert: true });
         return;
       }
       selected.push(foodId);
     }
     const next = { ...session, selectedIds: selected };
     await putSession(env, chatId, next);
-    const kb = foodPickerKeyboard(family, next);
-    const intro2 = foodPickerIntro(date, slot, family);
+    const kb = foodPickerKeyboard(family, next, curLang);
+    const intro2 = foodPickerIntro(date, slot, family, curLang);
     try { await tg.editMessage(env, chatId, messageId, intro2, kb); } catch {}
     await answer();
     return;
   }
 
-  // Vote: v:DATE:slot:foodId:1|2|3
   if (data.startsWith('v:')) {
     const parts = data.split(':');
-    // v:2025-08-21:lunch:f_abc:3  -> 5 parts
     if (parts.length !== 5) { await answer(); return; }
     const date = parts[1];
     const slot = parts[2];
     const foodId = parts[3];
     const value = parseInt(parts[4], 10);
     const chat = await getChat(env, chatId);
-    if (!chat || !chat.familyCode) { await answer({ text: 'Link a family first', show_alert: true }); return; }
+    const curLang = langOf(chat);
+    if (!chat || !chat.familyCode) { await answer({ text: t(curLang, 'needFamily'), show_alert: true }); return; }
     if (!chat.memberId) {
-      await answer({ text: 'Pick who you are first: /whoami', show_alert: true });
-      await tg.sendMessage(env, chatId, `⚠️ To vote, first set who you are with /whoami — then tap the rating again.`);
+      await answer({ text: t(curLang, 'needWhoForVote'), show_alert: true });
+      await tg.sendMessage(env, chatId, t(curLang, 'needWhoForVote2'));
       return;
     }
     if (![1, 2, 3].includes(value)) { await answer({ text: 'Invalid vote', show_alert: true }); return; }
     try {
       const updated = await foodlog.setVote(env, chat.familyCode, { date, slot, foodId, memberId: chat.memberId, value });
-      const txt = slotDetailText(updated, date, slot, chat.memberId);
-      const kb = slotKeyboard(updated, date, slot, chat.weekAnchor || date);
+      const txt = slotDetailText(updated, date, slot, chat.memberId, curLang);
+      const kb = slotKeyboard(updated, date, slot, chat.weekAnchor || date, curLang);
       try { await tg.editMessage(env, chatId, messageId, txt, kb); } catch { await tg.sendMessage(env, chatId, txt, { reply_markup: kb }); }
       const faces = { 1: '😞', 2: '😐', 3: '😋' };
-      await answer({ text: `Rated ${faces[value]} (${value}/3)` });
+      await answer({ text: t(curLang, 'rated', { face: faces[value], v: String(value) }) });
     } catch (e) {
       await answer({ text: e.message.slice(0, 200), show_alert: true });
     }
     return;
   }
 
-  // Clear meal: clear:DATE:slot
   if (data.startsWith('clear:')) {
     const parts = data.split(':');
     if (parts.length !== 3) { await answer(); return; }
     const date = parts[1];
     const slot = parts[2];
     const chat = await getChat(env, chatId);
-    if (!chat || !chat.familyCode) { await answer({ text: 'Link a family first', show_alert: true }); return; }
+    const curLang = langOf(chat);
+    if (!chat || !chat.familyCode) { await answer({ text: t(curLang, 'needFamily'), show_alert: true }); return; }
     try {
       const updated = await foodlog.clearMeal(env, chat.familyCode, date, slot);
-      const txt = slotDetailText(updated, date, slot, chat.memberId);
-      const kb = slotKeyboard(updated, date, slot, chat.weekAnchor || date);
+      const txt = slotDetailText(updated, date, slot, chat.memberId, curLang);
+      const kb = slotKeyboard(updated, date, slot, chat.weekAnchor || date, curLang);
       try { await tg.editMessage(env, chatId, messageId, txt, kb); } catch { await tg.sendMessage(env, chatId, txt, { reply_markup: kb }); }
-      await answer({ text: 'Meal cleared' });
+      await answer({ text: t(curLang, 'cleared') });
     } catch (e) {
       await answer({ text: e.message.slice(0, 200), show_alert: true });
     }
     return;
   }
 
-  // Whoami pick: who:memberId
   if (data.startsWith('who:')) {
     const memberId = data.slice(4);
     const res = await ensureFamily(env, chatId);
@@ -514,9 +536,9 @@ export async function handleCallback(env, cb) {
     const member = res.family.members.find((m) => m.id === memberId);
     if (!member) { await answer({ text: 'Member not found', show_alert: true }); return; }
     await updateChat(env, chatId, { memberId: member.id, memberName: member.name });
-    try { await tg.editMessage(env, chatId, messageId, `✅ You are <b>${member.emoji} ${htmlEsc(member.name)}</b>. Votes & meal logs will be under that name.\n\nTap /week to see meals.`, undefined); } catch {}
-    await answer({ text: `You are ${member.name}` });
-    // Optionally refresh week view so member context is clear
+    const curLang = langOf(res.chat);
+    try { await tg.editMessage(env, chatId, messageId, t(curLang, 'youAre', { who: `${member.emoji} ${member.name}` }), undefined); } catch {}
+    await answer({ text: member.name });
     await showWeek(env, chatId, res.chat.weekAnchor || todayStr());
     return;
   }
