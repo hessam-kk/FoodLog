@@ -1,12 +1,12 @@
-import { weekDates, weekRangeLabel, dayLabel, slotIcon, foodEmoji, foodAvg, mealAvg, fmt1, voteFace, todayStr, htmlEsc } from './util.js';
+import { weekDates, weekRangeLabel, dayLabel, slotIcon, foodEmoji, foodAvg, mealAvg, fmt1, voteFace, todayStr, htmlEsc, slotLabel } from './util.js';
+import { t } from './i18n.js';
 
-export function weekMessageText(family, anchor) {
-  const range = weekRangeLabel(anchor, family.weekStart);
+export function weekMessageText(family, anchor, lang = 'fa') {
+  const range = weekRangeLabel(anchor, family.weekStart, lang);
   const dates = weekDates(anchor, family.weekStart);
   const today = todayStr();
   const isCurrent = dates.includes(today);
 
-  // Count meals + votes in this week for header stat
   let mealCount = 0;
   let sum = 0, votes = 0;
   for (const d of dates) {
@@ -24,62 +24,66 @@ export function weekMessageText(family, anchor) {
   }
   const avg = votes ? (sum / votes) : null;
 
-  let txt = `📅 <b>${htmlEsc(family.name)} — Week of ${htmlEsc(range)}</b>`;
-  if (isCurrent) txt += `  <i>(this week)</i>`;
-  txt += `\n<code>${htmlEsc(family.id)}</code> · ${htmlEsc(family.weekStart === 'sat' ? 'Sat–Fri' : 'Mon–Sun')} · 👥 ${family.members.length} members`;
-  txt += `\n${mealCount} meals · ${votes ? `${fmt1(avg)} ${voteFace(avg)} avg (${votes} votes)` : 'no votes yet'}`;
-  txt += `\n\n<b>Tap a slot below</b> to log or rate. Empty slots show “—”.`;
+  const weekTitle = isCurrent ? t(lang, 'thisWeek') : t(lang, 'weekOf', { range: htmlEsc(range) });
+  const weekSpan = family.weekStart === 'sat' ? t(lang, 'satFri') : t(lang, 'monSun');
+  let txt = `📅 <b>${htmlEsc(family.name)} — ${weekTitle}</b>`;
+  if (isCurrent) txt += lang === 'fa' ? '  <i>(این هفته)</i>' : '  <i>(this week)</i>';
+  txt += `\n<code>${htmlEsc(family.id)}</code> · ${htmlEsc(weekSpan)} · 👥 ${family.members.length} ${t(lang, 'members')}`;
+  txt += `\n${mealCount} ${t(lang, 'meals')} · ${votes ? `${fmt1(avg)} ${voteFace(avg)} ${t(lang, 'avg')} (${votes} ${t(lang, 'votes')})` : t(lang, 'noVotes')}`;
+  txt += `\n\n<b>${t(lang, 'tapHint')}</b>`;
 
-  // Detail lines — compact but readable. Each day on its own line.
-  const lines = [];
+  const blocks = [];
   for (const d of dates) {
     const isToday = d === today;
-    const day = dayLabel(d);
+    const day = dayLabel(d, lang);
     const prefix = isToday ? '▶ ' : '  ';
-    const parts = [];
+    const todayMark = isToday ? ` · ${t(lang, 'today')}` : '';
+    const header = `${prefix}<b>${htmlEsc(day)}${todayMark}</b>`;
+    const slotLines = [];
     for (const slot of ['lunch', 'dinner']) {
       const meal = (family.meals[d] || {})[slot];
+      const label = slotLabel(slot, lang);
+      let content;
       if (!meal || !meal.items.length) {
-        parts.push(`${slotIcon(slot)} —`);
+        content = t(lang, 'empty');
       } else {
-        const chips = meal.items.map((it) => {
+        content = meal.items.map((it) => {
           const av = foodAvg(family, d, slot, it.id);
           const score = av != null ? ` ${fmt1(av)}${voteFace(av)}` : '';
           return `${foodEmoji(it.name)} ${htmlEsc(it.name)}${score}`;
         }).join(' + ');
-        parts.push(`${slotIcon(slot)} ${chips}`);
       }
+      slotLines.push(`  ${slotIcon(slot)} ${label}: ${content}`);
     }
-    lines.push(`${prefix}<b>${htmlEsc(day)}${isToday ? ' · Today' : ''}</b> — ${parts.join('  |  ')}`);
+    blocks.push(`${header}\n${slotLines.join('\n')}`);
   }
-  txt += `\n\n${lines.join('\n')}`;
-
-  txt += `\n\n<i>Use ◀ Prev / Next ▶ to change week. Tap any slot button below.</i>`;
+  txt += `\n\n${blocks.join('\n\n')}`;
+  txt += `\n\n<i>${t(lang, 'useNav')}</i>`;
   return txt;
 }
 
-export function slotDetailText(family, date, slot, memberId) {
+export function slotDetailText(family, date, slot, memberId, lang = 'fa') {
   const meal = (family.meals[date] || {})[slot];
-  const day = dayLabel(date);
+  const day = dayLabel(date, lang);
   const icon = slotIcon(slot);
-  let txt = `${icon} <b>${htmlEsc(day)} — ${slot}</b>  <code>${date}</code>\n`;
+  const sLabel = slotLabel(slot, lang);
+  let txt = `${icon} <b>${htmlEsc(day)} — ${sLabel}</b>  <code>${date}</code>\n`;
 
   if (!meal || !meal.items.length) {
-    txt += `\n<i>No meal logged yet.</i>\nTap <b>➕ Add foods</b> to log this meal.`;
+    txt += `\n<i>${t(lang, 'noMeal')}</i>\n${t(lang, 'noMealHint')}`;
     return txt;
   }
 
-  // Who logged
   if (meal.by) {
     const m = family.members.find((x) => x.id === meal.by);
-    if (m) txt += `\nLogged by ${m.emoji} ${htmlEsc(m.name)}`;
+    if (m) txt += `\n${t(lang, 'loggedBy')} ${m.emoji} ${htmlEsc(m.name)}`;
   }
 
-  txt += `\n\n<b>Foods in this meal:</b>`;
+  txt += `\n\n<b>${t(lang, 'foodsInMeal')}</b>`;
   for (const it of meal.items) {
     const av = foodAvg(family, date, slot, it.id);
     const em = foodEmoji(it.name);
-    const score = av != null ? ` — avg ${fmt1(av)} ${voteFace(av)}` : ' — not rated yet';
+    const score = av != null ? ` — ${t(lang, 'avg')} ${fmt1(av)} ${voteFace(av)}` : ` — ${t(lang, 'notRated')}`;
     txt += `\n• ${em} <b>${htmlEsc(it.name)}</b>${score}`;
 
     const votes = ((family.foodVotes[date] || {})[slot] || {})[it.id] || {};
@@ -88,46 +92,48 @@ export function slotDetailText(family, date, slot, memberId) {
         const mm = family.members.find((x) => x.id === mid);
         const face = val === 1 ? '😞' : val === 2 ? '😐' : '😋';
         const who = mm ? `${mm.emoji} ${htmlEsc(mm.name)}` : htmlEsc(mid.slice(0, 6));
-        const you = mid === memberId ? ' <i>(you)</i>' : '';
+        const you = mid === memberId ? (lang === 'fa' ? ' <i>(شما)</i>' : ' <i>(you)</i>') : '';
         return `${who}: ${face}${you}`;
       }).join(', ');
       txt += `\n  <i>${details}</i>`;
     } else {
-      txt += `\n  <i>no votes yet</i>`;
+      txt += `\n  <i>${t(lang, 'noVotesYet')}</i>`;
     }
   }
 
   const mv = mealAvg(family, date, slot);
-  if (mv != null) txt += `\n\nMeal average: <b>${fmt1(mv)} ${voteFace(mv)}</b>`;
+  if (mv != null) txt += `\n\n${t(lang, 'mealAvg')} <b>${fmt1(mv)} ${voteFace(mv)}</b>`;
 
   if (meal.items.length > 1) {
-    txt += `\n\n<i>Each food is rated separately — tap a rating below for that food.</i>`;
+    txt += `\n\n<i>${t(lang, 'multiHint')}</i>`;
   }
 
-  txt += `\n\n<i>Want to change the foods? Tap ➕ Edit foods. To remove the whole meal tap 🗑 Clear.</i>`;
+  txt += `\n\n<i>${t(lang, 'changeHint')}</i>`;
   return txt;
 }
 
-export function foodPickerIntro(date, slot, family) {
-  const day = dayLabel(date);
-  return `✏️ <b>${htmlEsc(day)} — ${slot}</b>\nPick foods for this meal. Tap to toggle ✅. Use ➕ New food to add one not listed.\nWhen ready tap <b>✅ Done</b>.`;
+export function foodPickerIntro(date, slot, family, lang = 'fa') {
+  const day = dayLabel(date, lang);
+  const sLabel = slotLabel(slot, lang);
+  return t(lang, 'pickerTitle', { day: htmlEsc(day), slot: sLabel });
 }
 
-export function helpText() {
+export function helpText(lang = 'fa') {
   return [
-    `🍲 <b>FoodLog Bot — commands</b>`,
+    t(lang, 'helpTitle'),
     ``,
-    `/week — show the main week message (tap any slot to log/rate)`,
-    `/start &lt;CODE&gt; — link this chat to a family (6-char code)`,
-    `/whoami — pick which family member you are (for votes)`,
-    `/foods — list food memory &amp; add a new food`,
-    `/help — this message`,
+    t(lang, 'helpWeek'),
+    t(lang, 'helpStart'),
+    t(lang, 'helpWhoami'),
+    t(lang, 'helpFoods'),
+    t(lang, 'helpHelp'),
+    t(lang, 'helpLang'),
     ``,
-    `<b>How it works</b>`,
-    `• The main week message has a button for every lunch/dinner.`,
-    `• Tap an <i>empty</i> slot → pick foods to log that meal.`,
-    `• Tap a <i>filled</i> slot → see foods &amp; rate each one (😞😐😋).`,
-    `• Use ◀ Prev / Next ▶ to browse weeks.`,
-    `• Ratings need a member — set it with /whoami.`,
+    t(lang, 'howTitle'),
+    t(lang, 'how1'),
+    t(lang, 'how2'),
+    t(lang, 'how3'),
+    t(lang, 'how4'),
+    t(lang, 'how5'),
   ].join('\n');
 }
