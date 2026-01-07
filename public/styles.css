@@ -669,6 +669,68 @@ button.food-chip:active { transform: scale(0.94); }
   border-radius: 13px;
 }
 
+/* ------------------------- 0–10 rating slider ----------------------------- */
+
+.vote-slider {
+  margin-top: 14px;
+  padding: 12px 14px 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.vs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.vs-value {
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.vote-slider input[type='range'] {
+  width: 100%;
+  margin-top: 6px;
+  accent-color: #e8553f;
+  height: 30px;
+  cursor: pointer;
+}
+
+/* emoji meter — inactive faces are grayscale, the active one pops */
+.vs-faces {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2px;
+  padding: 0 2px;
+}
+
+.vs-face {
+  font-size: 19px;
+  line-height: 1.2;
+  filter: grayscale(1);
+  opacity: 0.4;
+  transition: transform 0.15s ease, filter 0.15s ease, opacity 0.15s ease;
+}
+
+.vs-face.on {
+  filter: none;
+  opacity: 1;
+  transform: scale(1.3);
+}
+
+.vs-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ------------------------------ bottom sheet ------------------------------ */
 
 .backdrop {
@@ -1109,9 +1171,8 @@ button.food-chip:active { transform: scale(0.94); }
   opacity: 0.85;
 }
 
-.trend-grid i:nth-child(1) { bottom: 32px; }
-.trend-grid i:nth-child(2) { bottom: 64px; }
-.trend-grid i:nth-child(3) { bottom: 96px; }
+.trend-grid i:nth-child(1) { bottom: 48px; }  /* value 5  */
+.trend-grid i:nth-child(2) { bottom: 96px; }  /* value 10 */
 
 .trend-col {
   flex: 1;
