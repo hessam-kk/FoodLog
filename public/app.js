@@ -24,7 +24,7 @@ const I18N = {
     'addFood': '＋ Add {slot}',
     'by': 'by {who}',
     'rateHint': 'tap a food to rate it 🗳️',
-    'rateAria': 'Rate {v} of 3',
+    'rateAria': 'Rate {v} of 10',
     'sheet.what': 'What did you eat?',
     'sheet.loggedBy': 'logged by {who}',
     'sheet.nothing': 'Nothing yet — pick or type foods below. You can add several!',
@@ -39,6 +39,8 @@ const I18N = {
     'toast.mealSaved': 'Meal saved ✓', 'toast.mealCleared': 'Meal cleared',
     'rate.everyone': 'Everyone\'s vote', 'rate.notYet': '— not yet',
     'rate.none': 'No votes yet — be the first!',
+    'rate.slideHint': 'Slide to rate 0–10',
+    'rate.clear': 'Clear my vote',
     'rate.votesSoFar': (p) => `${p.n} vote${p.n === 1 ? '' : 's'} so far`,
     'rate.editMeal': '✏️ Edit meal',
     'who.title': 'Who\'s using this phone?',
@@ -146,7 +148,7 @@ const I18N = {
     'addFood': '＋ افزودن {slot}',
     'by': 'ثبت توسط {who}',
     'rateHint': 'برای امتیاز دادن، روی یک غذا بزنید 🗳️',
-    'rateAria': 'امتیاز {v} از ۳',
+    'rateAria': 'امتیاز {v} از ۱۰',
     'sheet.what': 'چه چیزی خوردید؟',
     'sheet.loggedBy': 'ثبت شده توسط {who}',
     'sheet.nothing': 'هنوز چیزی نیست — از پایین انتخاب یا تایپ کنید. می‌توانید چند غذا اضافه کنید!',
@@ -161,6 +163,8 @@ const I18N = {
     'toast.mealSaved': 'غذا ثبت شد ✓', 'toast.mealCleared': 'وعده پاک شد',
     'rate.everyone': 'رأی همه', 'rate.notYet': '— هنوز',
     'rate.none': 'هنوز رأیی نیست — اولین باشید!',
+    'rate.slideHint': 'برای امتیاز ۰ تا ۱۰ بکشید',
+    'rate.clear': 'حذف رأی من',
     'rate.votesSoFar': (p) => `تا حالا ${num(p.n)} رأی`,
     'rate.editMeal': '✏️ ویرایش وعده',
     'who.title': 'این گوشی مال کیست؟',
@@ -364,18 +368,25 @@ function monthDates(anchor) {
   return Array.from({ length: last }, (_, i) => `${anchor.slice(0, 8)}${String(i + 1).padStart(2, '0')}`);
 }
 
-const VOTE_FACES = { 1: '😞', 2: '😐', 3: '😋' };
+// Scores are on a 0–10 scale. Faces map proportionally to the old 1–3 buckets:
+// 0–2.5 😞 (old 1), 2.5–7.5 😐 (old 2), 7.5+ 😋 (old 3).
 function voteFace(avg) {
-  return avg >= 2.5 ? '😋' : avg >= 1.5 ? '😐' : '😞';
+  return avg >= 7.5 ? '😋' : avg >= 2.5 ? '😐' : '😞';
 }
 
-// Continuous 1→3 tint (bad → mid → good theme colors) via CSS color-mix,
-// so close averages like 2.5 vs 2.7 stay visually distinguishable.
+// Finer 5-step face scale used by the rating slider.
+const SLIDER_FACES = ['😞', '😟', '😐', '🙂', '😋'];
+function sliderFace(v) {
+  return SLIDER_FACES[Math.max(0, Math.min(4, Math.floor(v / 2)))];
+}
+
+// Continuous 0→10 tint (bad → mid → good theme colors) via CSS color-mix,
+// so close averages like 5.5 vs 5.8 stay visually distinguishable.
 function scoreGrad(avg) {
   if (avg == null) return '';
-  const x = Math.max(1, Math.min(3, avg));
-  const [a, b] = x < 2 ? ['--bad', '--mid'] : ['--mid', '--good'];
-  const p = Math.round(Math.max(0, Math.min(100, (x - (x < 2 ? 1 : 2)) * 100)));
+  const x = Math.max(0, Math.min(10, avg));
+  const [a, b] = x < 5 ? ['--bad', '--mid'] : ['--mid', '--good'];
+  const p = Math.round(Math.max(0, Math.min(100, ((x - (x < 5 ? 0 : 5)) / 5) * 100)));
   return `--ca:var(${a});--cb:var(${b});--cp:${p}%`;
 }
 
@@ -700,7 +711,7 @@ function trendHtml(dates) {
       ${columns.map((c) => `
         <div class="trend-col">
           <span class="trend-val">${c.avg == null ? '' : fmt1(c.avg)}</span>
-          <div class="trend-bar ${c.avg == null ? 'zero' : 'grad'}" style="height:${c.avg == null ? 4 : Math.max(4, Math.round((c.avg / 3) * 96))}px;${c.avg == null ? '' : scoreGrad(c.avg)}"></div>
+          <div class="trend-bar ${c.avg == null ? 'zero' : 'grad'}" style="height:${c.avg == null ? 4 : Math.max(4, Math.round((c.avg / 10) * 96))}px;${c.avg == null ? '' : scoreGrad(c.avg)}"></div>
           <span class="trend-day">${esc(c.label)}</span>
         </div>`).join('')}
     </div>`;
@@ -902,7 +913,7 @@ function viewStats() {
         <span class="stat-emoji">${stats.avg != null ? voteFace(stats.avg) : '🍽️'}</span>
         <div>
           <div class="stat-label">${t('stats.foodRating')}</div>
-          <div class="stat-value">${fmt1(stats.avg)}<span class="unit">/ ${lang === 'fa' ? '۳' : '3'}</span></div>
+          <div class="stat-value">${fmt1(stats.avg)}<span class="unit">/ ${lang === 'fa' ? '۱۰' : '10'}</span></div>
           <div class="stat-sub">${stats.voteCount ? t('stats.ratingSub', { votes: stats.voteCount, meals: mealsTotal }) : t('stats.noVotes')}</div>
         </div>
       </div>
@@ -1445,7 +1456,7 @@ function rateSheetHtml() {
       <div class="rate-hero">
         <span class="rate-emoji">${count ? voteFace(avg) : '🍽️'}</span>
         <div>
-          <div class="rate-num">${fmt1(avg)}<span class="rate-denom">/ ${lang === 'fa' ? '۳' : '3'}</span></div>
+          <div class="rate-num">${fmt1(avg)}<span class="rate-denom">/ ${lang === 'fa' ? '۱۰' : '10'}</span></div>
           <div class="stat-sub">${count ? t('rate.votesSoFar', { n: count }) : t('rate.none')}</div>
         </div>
       </div>
@@ -1458,21 +1469,28 @@ function rateSheetHtml() {
               <div class="rate-member ${m.id === meId ? 'me-row' : ''}">
                 <span class="member-avatar" style="--member-color:${esc(m.color)}">${m.emoji}</span>
                 <span class="rm-name">${esc(m.name)}${m.id === meId ? '<span class="you-pill">You</span>' : ''}</span>
-                ${v
-                  ? `<span class="rate-m-face f${v}">${VOTE_FACES[v]} ${lang === 'fa' ? num(v) : v}</span>`
+                ${v != null
+                  ? `<span class="rate-m-face f${voteFace(v) === '😋' ? 3 : voteFace(v) === '😐' ? 2 : 1}">${voteFace(v)} ${lang === 'fa' ? num(v) : v}</span>`
                   : `<span class="rate-m-none">${t('rate.notYet')}</span>`}
               </div>`;
           }).join('')}
         </div>
       </div>
+      <div class="vote-slider">
+        <div class="vs-head">
+          <span class="vs-value" id="vs-value">${myVote != null ? `${sliderFace(myVote)} ${lang === 'fa' ? num(myVote) : myVote}` : t('rate.slideHint')}</span>
+          ${myVote != null ? `<button class="mini-btn" data-act="vote-clear" aria-label="${t('rate.clear')}">✕</button>` : ''}
+        </div>
+        <input type="range" id="vote-range" min="0" max="10" step="1" value="${myVote ?? 5}"
+          aria-label="${t('rateAria', { v: myVote != null ? (lang === 'fa' ? num(myVote) : myVote) : 5 })}">
+        <div class="vs-faces" aria-hidden="true">
+          ${SLIDER_FACES.map((f) => `<span class="vs-face${myVote != null && SLIDER_FACES.indexOf(sliderFace(myVote)) === SLIDER_FACES.indexOf(f) ? ' on' : ''}">${f}</span>`).join('')}
+        </div>
+        <div class="vs-scale"><span>${SLIDER_FACES[0]} ${lang === 'fa' ? '۰' : '0'}</span><span>${SLIDER_FACES[2]} ${lang === 'fa' ? '۵' : '5'}</span><span>🤩 ${lang === 'fa' ? '۱۰' : '10'}</span></div>
+      </div>
     </div>
     <div class="sheet-actions">
       <button class="btn ghost" data-act="edit-this-meal">${t('rate.editMeal')}</button>
-      <div class="vote-seg lg">
-        ${[1, 2, 3].map((v) => `
-          <button class="vote-btn v${v} ${myVote === v ? 'on' : ''}"
-            data-act="vote" data-value="${v}" aria-label="${t('rateAria', { v: lang === 'fa' ? num(v) : v })}">${VOTE_FACES[v]}</button>`).join('')}
-      </div>
     </div>`;
 }
 
@@ -1781,6 +1799,7 @@ const ACTIONS = {
     name: el.dataset.name,
   }),
   vote: (el) => castFoodVote(Number(el.dataset.value)),
+  'vote-clear': () => castFoodVote(null),
   'edit-this-meal': () => openMealSheet(sheet.date, sheet.slot),
   'save-meal': saveMeal,
   'clear-meal': clearMealSheet,
@@ -1839,6 +1858,19 @@ document.addEventListener('input', (e) => {
     foodsQuery = tEl.value;
     const list = document.getElementById('foods-list');
     if (list) list.innerHTML = foodsRowsHtml();
+  } else if (tEl.id === 'vote-range' && sheet?.kind === 'rate') {
+    const v = Number(tEl.value);
+    const label = document.getElementById('vs-value');
+    if (label) label.textContent = `${sliderFace(v)} ${lang === 'fa' ? num(v) : v}`;
+    const idx = Math.max(0, Math.min(4, Math.floor(v / 2)));
+    document.querySelectorAll('.vs-face').forEach((el, i) => el.classList.toggle('on', i === idx));
+  }
+});
+
+// Commit the slider vote when the user releases it.
+document.addEventListener('change', (e) => {
+  if (e.target.id === 'vote-range' && sheet?.kind === 'rate') {
+    castFoodVote(Number(e.target.value));
   }
 });
 
