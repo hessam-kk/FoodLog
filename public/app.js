@@ -353,6 +353,16 @@ function voteFace(avg) {
   return avg >= 2.5 ? '😋' : avg >= 1.5 ? '😐' : '😞';
 }
 
+// Continuous 1→3 tint (bad → mid → good theme colors) via CSS color-mix,
+// so close averages like 2.5 vs 2.7 stay visually distinguishable.
+function scoreGrad(avg) {
+  if (avg == null) return '';
+  const x = Math.max(1, Math.min(3, avg));
+  const [a, b] = x < 2 ? ['--bad', '--mid'] : ['--mid', '--good'];
+  const p = Math.round(Math.max(0, Math.min(100, (x - (x < 2 ? 1 : 2)) * 100)));
+  return `--ca:var(${a});--cb:var(${b});--cp:${p}%`;
+}
+
 const EMOJI_CHOICES = [
   '👩', '👨', '🧑', '👵', '👴', '👦',
   '👧', '🧒', '👶', '🧔', '👸', '🤴',
@@ -497,7 +507,8 @@ function foodVotesFor(date, slot, foodId) {
 }
 
 function scoreBadge(avg) {
-  return `<span class="chip-score f${Math.round(avg)}">${voteFace(avg)} ${fmt1(avg)}</span>`;
+  const cls = avg >= 2.5 ? 'f3' : avg >= 1.5 ? 'f2' : 'f1'; // fallback when color-mix unsupported
+  return `<span class="chip-score grad ${cls}" style="${scoreGrad(avg)}">${voteFace(avg)} ${fmt1(avg)}</span>`;
 }
 
 // Chips for one meal's items. Interactive chips (week view) open the rating
@@ -669,10 +680,11 @@ function trendHtml(dates) {
   }
   return `
     <div class="trend">
+      <div class="trend-grid" aria-hidden="true"><i></i><i></i><i></i></div>
       ${columns.map((c) => `
         <div class="trend-col">
           <span class="trend-val">${c.avg == null ? '' : fmt1(c.avg)}</span>
-          <div class="trend-bar ${c.avg == null ? 'zero' : ''}" style="height:${c.avg == null ? 4 : Math.max(4, (c.avg / 3) * 74)}px"></div>
+          <div class="trend-bar ${c.avg == null ? 'zero' : 'grad'}" style="height:${c.avg == null ? 4 : Math.max(4, Math.round((c.avg / 3) * 96))}px;${c.avg == null ? '' : scoreGrad(c.avg)}"></div>
           <span class="trend-day">${esc(c.label)}</span>
         </div>`).join('')}
     </div>`;

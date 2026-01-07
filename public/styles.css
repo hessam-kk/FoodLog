@@ -507,6 +507,16 @@ button.food-chip:active { transform: scale(0.94); }
 .f2 { background: rgba(217, 154, 6, 0.16); color: var(--mid); }
 .f3 { background: rgba(63, 143, 95, 0.15); color: var(--good); }
 
+/* continuous score tint — overrides f1/f2/f3 where color-mix() is supported */
+.chip-score.grad,
+.trend-bar.grad {
+  --sc: color-mix(in srgb, var(--ca), var(--cb) var(--cp, 50%));
+}
+.chip-score.grad {
+  color: var(--sc);
+  background: color-mix(in srgb, var(--sc) 15%, transparent);
+}
+
 .meal-by {
   margin-top: 5px;
   font-size: 11px;
@@ -1073,12 +1083,35 @@ button.food-chip:active { transform: scale(0.94); }
 }
 
 .trend {
+  position: relative;
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  height: 110px;
+  height: 140px;
   padding-top: 6px;
 }
+
+/* scale reference lines at values 1, 2, 3 (bar area is 96px tall) */
+.trend-grid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 20px;
+  height: 96px;
+  pointer-events: none;
+}
+
+.trend-grid i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed var(--line);
+  opacity: 0.85;
+}
+
+.trend-grid i:nth-child(1) { bottom: 32px; }
+.trend-grid i:nth-child(2) { bottom: 64px; }
+.trend-grid i:nth-child(3) { bottom: 96px; }
 
 .trend-col {
   flex: 1;
@@ -1089,6 +1122,8 @@ button.food-chip:active { transform: scale(0.94); }
   height: 100%;
   justify-content: flex-end;
   min-width: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .trend-val {
@@ -1109,6 +1144,12 @@ button.food-chip:active { transform: scale(0.94); }
 }
 
 .trend-bar.zero { background: var(--track); opacity: 1; }
+
+.trend-bar.grad {
+  background: linear-gradient(160deg,
+    color-mix(in srgb, var(--sc) 72%, #fff),
+    var(--sc));
+}
 
 .trend-day {
   font-size: 10.5px;
