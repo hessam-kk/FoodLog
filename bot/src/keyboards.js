@@ -82,14 +82,9 @@ export function slotKeyboard(family, date, slot, anchor, lang = 'fa') {
     return { inline_keyboard: rows };
   }
 
-  // Per-food vote rows: one row per food with 3 vote buttons
+  // One row per food — tap to open the 0–10 rating grid for that food
   for (const it of meal.items) {
-    const short = it.name.slice(0, 12);
-    rows.push([
-      { text: `${short} 😞`, callback_data: `v:${date}:${slot}:${it.id}:1` },
-      { text: `${short} 😐`, callback_data: `v:${date}:${slot}:${it.id}:2` },
-      { text: `${short} 😋`, callback_data: `v:${date}:${slot}:${it.id}:3` },
-    ]);
+    rows.push([{ text: `${it.name.slice(0, 24)} 🗳`, callback_data: `vr:${date}:${slot}:${it.id}` }]);
   }
 
   rows.push([
@@ -98,6 +93,14 @@ export function slotKeyboard(family, date, slot, anchor, lang = 'fa') {
   ]);
   rows.push([{ text: t(lang, 'backToWeek'), callback_data: `nav:${anchor}` }]);
   return { inline_keyboard: rows };
+}
+
+/** 0–10 rating grid for a single food */
+export function ratingGridKeyboard(date, slot, foodId) {
+  const mk = (n) => ({ text: String(n), callback_data: `v:${date}:${slot}:${foodId}:${n}` });
+  const row0to5 = [0, 1, 2, 3, 4, 5].map(mk);
+  const row6to10 = [6, 7, 8, 9, 10].map(mk);
+  return { inline_keyboard: [row0to5, row6to10] };
 }
 
 /** Food multi-select picker for logging a meal */
