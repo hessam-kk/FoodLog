@@ -112,6 +112,14 @@ const I18N = {
     'stats.bestSub': '{face} {avg} average · {votes}',
     'stats.votes': (p) => `${p.n} vote${p.n === 1 ? '' : 's'}`,
     'stats.activityLine': (p) => `logged ${p.logs} meal${p.logs === 1 ? '' : 's'} · ${p.votes} vote${p.votes === 1 ? '' : 's'} · gives ${p.avg}★`,
+    'stats.suggest': '💡 Suggestions',
+    'stats.lovedTitle': '💛 Most loved',
+    'stats.staleTitle': '🕰️ Not eaten recently',
+    'stats.daysAgo': (p) => `${p.n} day${p.n === 1 ? '' : 's'} ago`,
+    'stats.yesterday': 'yesterday',
+    'stats.neverLogged': 'never logged',
+    'stats.noLoved': 'No ratings yet — rate some foods!',
+    'stats.allFresh': 'Everything else was eaten in the last 2 weeks 🎉',
     'aria.refresh': 'Refresh', 'aria.who': 'Who am I', 'aria.lang': 'Language', 'aria.remove': 'Remove',
     'toast.updated': 'Updated ✓',
     'boot': 'Setting the table…',
@@ -226,6 +234,14 @@ const I18N = {
     'stats.bestSub': '{face} میانگین {avg} · {votes}',
     'stats.votes': (p) => `${num(p.n)} رأی`,
     'stats.activityLine': (p) => `${num(p.logs)} وعده ثبت · ${num(p.votes)} رأی · میانگین ${p.avg}★`,
+    'stats.suggest': '💡 پیشنهاد غذا',
+    'stats.lovedTitle': '💛 محبوب‌ترین‌ها',
+    'stats.staleTitle': '🕰️ مدت‌هاست نخورده‌اید',
+    'stats.daysAgo': (p) => `${num(p.n)} روز پیش`,
+    'stats.yesterday': 'دیروز',
+    'stats.neverLogged': 'تا حالا پخته نشده',
+    'stats.noLoved': 'هنوز امتیازی نیست — به غذاها امتیاز بدهید!',
+    'stats.allFresh': 'بقیه را این دو هفته اخیر خورده‌اید 🎉',
     'aria.refresh': 'به‌روزرسانی', 'aria.who': 'من کیستم', 'aria.lang': 'زبان', 'aria.remove': 'حذف',
     'toast.updated': 'به‌روز شد ✓',
     'boot': 'چیدن میز…',
@@ -766,6 +782,101 @@ function activityHtml(stats) {
     </div>`;
 }
 
+/* --------------------------- suggestions (stats) -------------------------- */
+
+// All-time aggregation per food id: how often / how well liked / last eaten.
+function computeSuggestions() {
+  const agg = new Map();
+  for (const [date, slots] of Object.entries(family.meals)) {
+    for (const slot of ['lunch', 'dinner']) {
+      const meal = slots[slot];
+      if (!meal) continue;
+      for (const it of meal.items || []) {
+        let cur = agg.get(it.id);
+        if (!cur) {
+          cur = { name: it.name, count: 0, voteSum: 0, voteCount: 0, last: null };
+          agg.set(it.id, cur);
+        }
+        cur.count++;
+        if (!cur.last || date > cur.last) cur.last = date;
+        for (const val of Object.values(foodVotesFor(date, slot, it.id))) {
+          cur.voteSum += val;
+          cur.voteCount++;
+        }
+      }
+    }
+  }
+
+  // Most loved = highest average rating all-time (min. 1 vote), votes as tiebreak.
+  const loved = [...agg.entries()]
+    .filter(([, f]) => f.voteCount > 0)
+    .sort((a, b) => (b[1].voteSum / b[1].voteCount) - (a[1].voteSum / a[1].voteCount) || b[1].voteCount - a[1].voteCount)
+    .slice(0, 5)
+    .map(([id, f]) => ({ id, ...f, avg: f.voteSum / f.voteCount }));
+
+  // Stale = in food memory but not logged in the last 14 days (or never logged).
+  const cutoff = addDays(todayStr(), -14);
+  const stale = family.foods
+    .map((f) => {
+      const st = agg.get(f.id);
+      return { id: f.id, name: f.name, count: st ? st.count : 0, last: st ? st.last : null };
+    })
+    .filter((f) => !f.last || f.last < cutoff)
+    .sort((a, b) => {
+      if (a.last && b.last) return a.last < b.last ? -1 : 1;
+      if (a.last) return -1; // eaten-before before never-logged
+      if (b.last) return 1;
+      return b.count - a.count || a.name.localeCompare(b.name);
+    })
+    .slice(0, 5);
+
+  return { loved, stale };
+}
+
+function lastEatenLabel(last) {
+  if (!last) return t('stats.neverLogged');
+  const today = todayStr();
+  if (last === today) return t('today');
+  if (last === addDays(today, -1)) return t('stats.yesterday');
+  const days = Math.round((parseDate(today) - parseDate(last)) / 86400000);
+  return t('stats.daysAgo', { n: days });
+}
+
+function suggestionsHtml() {
+  const { loved, stale } = computeSuggestions();
+  const head = (txt) => `<div class="suggest-head">${esc(txt)}</div>`;
+
+  let html = head(t('stats.lovedTitle'));
+  html += loved.length ? `
+    <div class="member-rows" style="margin-top:8px">
+      ${loved.map((f) => `
+        <div class="member-row">
+          <span class="food-emoji">${foodEmoji(f.name)}</span>
+          <div class="member-main">
+            <div class="member-name">${esc(f.name)}</div>
+            <div class="member-stats">${t('stats.votes', { n: lang === 'fa' ? num(f.voteCount) : f.voteCount })} · ${t('foods.used', { n: f.count })}</div>
+          </div>
+          ${scoreBadge(f.avg)}
+        </div>`).join('')}
+    </div>` : `<div class="empty-note" style="margin-top:6px">${t('stats.noLoved')}</div>`;
+
+  html += head(t('stats.staleTitle'));
+  html += stale.length ? `
+    <div class="member-rows" style="margin-top:8px">
+      ${stale.map((f) => `
+        <div class="member-row">
+          <span class="food-emoji">${foodEmoji(f.name)}</span>
+          <div class="member-main">
+            <div class="member-name">${esc(f.name)}</div>
+            <div class="member-stats">${lastEatenLabel(f.last)}</div>
+          </div>
+          <span class="bar-count">×${lang === 'fa' ? num(f.count) : f.count}</span>
+        </div>`).join('')}
+    </div>` : `<div class="empty-note" style="margin-top:6px">${t('stats.allFresh')}</div>`;
+
+  return html;
+}
+
 function viewStats() {
   const dates = statsMode === 'week' ? weekDates(nav.stats) : monthDates(nav.stats);
   const stats = statsFor(dates);
@@ -817,6 +928,10 @@ function viewStats() {
     <div class="card">
       <div class="card-title">${t('stats.fav')}</div>
       ${favoritesHtml(stats)}
+    </div>
+    <div class="card">
+      <div class="card-title">${t('stats.suggest')}</div>
+      ${suggestionsHtml()}
     </div>
     <div class="card">
       <div class="card-title">${t('stats.best')}</div>
