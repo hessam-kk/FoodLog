@@ -56,6 +56,7 @@ async function handleApi(request, env, url) {
   const db = env.FOODLOG_DB;
   if (!db) throw new ApiError('D1 database is not bound (FOODLOG_DB).', 500);
   await ensureSchema(db);
+  await ensureMigrations(db);
 
   const parts = url.pathname.split('/').filter(Boolean); // ['api', 'families', code, section, param, sub]
   const method = request.method.toUpperCase();
@@ -352,7 +353,9 @@ async function setVote(request, db, code) {
       .bind(family.id, body.date, body.slot, foodId, member.id).run();
   } else {
     const value = Number(body.value);
-    if (![1, 2, 3].includes(value)) throw new ApiError('Vote must be 1, 2 or 3.');
+    if (!Number.isInteger(value) || value < 0 || value > 10) {
+      throw new ApiError('Vote must be a whole number from 0 to 10.');
+    }
     await db.prepare(`INSERT INTO food_votes (family_id, date, slot, food_id, member_id, value) VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(family_id, date, slot, food_id, member_id) DO UPDATE SET value = excluded.value`)
       .bind(family.id, body.date, body.slot, foodId, member.id, value).run();
@@ -492,6 +495,10 @@ const SCHEMA = [
     value INTEGER NOT NULL,
     PRIMARY KEY (family_id, date, slot, food_id, member_id)
   )`,
+  `CREATE TABLE IF NOT EXISTS app_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  )`,
   // pre-release schema: the old meal-level votes table is replaced by food_votes
   'DROP TABLE IF EXISTS votes',
 ];
@@ -501,6 +508,21 @@ function ensureSchema(db) {
   schemaPromise ??= db.batch(SCHEMA.map((sql) => db.prepare(sql)))
     .catch((err) => { schemaPromise = null; throw err; });
   return schemaPromise;
+}
+
+// One-time data migration: old 1–3 votes → new 0–10 scale (1→0, 2→5, 3→10).
+let migratePromise = null;
+function ensureMigrations(db) {
+  migratePromise ??= (async () => {
+    const done = await db.prepare("SELECT value FROM app_meta WHERE key = 'vote_scale_0_10'").first();
+    if (!done) {
+      await db.batch([
+        db.prepare("UPDATE food_votes SET value = CASE value WHEN 1 THEN 0 WHEN 2 THEN 5 WHEN 3 THEN 10 END WHERE value IN (1, 2, 3)"),
+        db.prepare("INSERT INTO app_meta (key, value) VALUES ('vote_scale_0_10', 'done') ON CONFLICT(key) DO NOTHING"),
+      ]);
+    }
+  })().catch((err) => { migratePromise = null; throw err; });
+  return migratePromise;
 }
 
 function jsonResponse(data, status = 200) {
