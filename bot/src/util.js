@@ -93,10 +93,11 @@ export function fmt1(x) {
   return (Math.round(x * 10) / 10).toFixed(1);
 }
 
+// Scores are on a 0–10 scale; faces map proportionally (old 1/2/3 → 0/5/10).
 export function voteFace(avg) {
   if (avg == null) return '';
-  if (avg >= 2.5) return '😋';
-  if (avg >= 1.5) return '😐';
+  if (avg >= 7.5) return '😋';
+  if (avg >= 2.5) return '😐';
   return '😞';
 }
 
