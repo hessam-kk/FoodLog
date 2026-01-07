@@ -374,10 +374,10 @@ function voteFace(avg) {
   return avg >= 7.5 ? '😋' : avg >= 2.5 ? '😐' : '😞';
 }
 
-// Finer 5-step face scale used by the rating slider.
-const SLIDER_FACES = ['😞', '😟', '😐', '🙂', '😋'];
+// Finer 6-step face scale used by the rating slider — 🤮 reserved for 0.
+const SLIDER_FACES = ['🤮', '😞', '😟', '😐', '🙂', '😋'];
 function sliderFace(v) {
-  return SLIDER_FACES[Math.max(0, Math.min(4, Math.floor(v / 2)))];
+  return SLIDER_FACES[Math.max(0, Math.min(5, Math.round(v / 2)))];
 }
 
 // Continuous 0→10 tint (bad → mid → good theme colors) via CSS color-mix,
@@ -1862,7 +1862,7 @@ document.addEventListener('input', (e) => {
     const v = Number(tEl.value);
     const label = document.getElementById('vs-value');
     if (label) label.textContent = `${sliderFace(v)} ${lang === 'fa' ? num(v) : v}`;
-    const idx = Math.max(0, Math.min(4, Math.floor(v / 2)));
+    const idx = Math.max(0, Math.min(5, Math.round(v / 2)));
     document.querySelectorAll('.vs-face').forEach((el, i) => el.classList.toggle('on', i === idx));
   }
 });
