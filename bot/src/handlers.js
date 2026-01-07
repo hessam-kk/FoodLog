@@ -1,9 +1,9 @@
 import { getChat, putChat, updateChat, getSession, putSession, clearSession } from './store.js';
 import * as foodlog from './foodlog.js';
 import * as tg from './telegram.js';
-import { weekKeyboard, slotKeyboard, foodPickerKeyboard, whoamiKeyboard, foodsListKeyboard, langKeyboard } from './keyboards.js';
+import { weekKeyboard, slotKeyboard, foodPickerKeyboard, whoamiKeyboard, foodsListKeyboard, langKeyboard, ratingGridKeyboard } from './keyboards.js';
 import { weekMessageText, slotDetailText, foodPickerIntro, helpText } from './format.js';
-import { todayStr, htmlEsc } from './util.js';
+import { todayStr, htmlEsc, dayLabel, slotLabel, slotIcon, foodEmoji, foodAvg } from './util.js';
 import { t, getLangFromChat, normalizeLang } from './i18n.js';
 
 // ---------- helpers ----------
@@ -480,6 +480,29 @@ export async function handleCallback(env, cb) {
     return;
   }
 
+  // Open the 0–10 rating grid for one food: vr:DATE:slot:foodId
+  if (data.startsWith('vr:')) {
+    const parts = data.split(':');
+    if (parts.length !== 4) { await answer(); return; }
+    const date = parts[1];
+    const slot = parts[2];
+    const foodId = parts[3];
+    const res = await ensureFamily(env, chatId);
+    if (!res || !res.family) { await answer({ text: t(lang, 'needFamily'), show_alert: true }); return; }
+    const { family, chat } = res;
+    const curLang = langOf(chat);
+    const meal = (family.meals[date] || {})[slot];
+    const it = meal && meal.items.find((x) => x.id === foodId);
+    if (!it) { await answer({ text: t(curLang, 'invalidFood'), show_alert: true }); return; }
+    const av = foodAvg(family, date, slot, foodId);
+    const day = dayLabel(date, curLang);
+    const sLabel = slotLabel(slot, curLang);
+    const txt = `${slotIcon(slot)} ${foodEmoji(it.name)} <b>${htmlEsc(it.name)}</b>\n${day} — ${sLabel}\n\n${t(curLang, 'avg')}: <b>${av != null ? `${av.toFixed(1)} / 10` : t(curLang, 'notRated')}</b>\n\n${t(curLang, 'rateGridHint')}`;
+    await tg.sendMessage(env, chatId, txt, { reply_markup: ratingGridKeyboard(date, slot, foodId) });
+    await answer();
+    return;
+  }
+
   if (data.startsWith('v:')) {
     const parts = data.split(':');
     if (parts.length !== 5) { await answer(); return; }
@@ -495,14 +518,13 @@ export async function handleCallback(env, cb) {
       await tg.sendMessage(env, chatId, t(curLang, 'needWhoForVote2'));
       return;
     }
-    if (![1, 2, 3].includes(value)) { await answer({ text: 'Invalid vote', show_alert: true }); return; }
+    if (!Number.isInteger(value) || value < 0 || value > 10) { await answer({ text: 'Invalid vote', show_alert: true }); return; }
     try {
       const updated = await foodlog.setVote(env, chat.familyCode, { date, slot, foodId, memberId: chat.memberId, value });
       const txt = slotDetailText(updated, date, slot, chat.memberId, curLang);
       const kb = slotKeyboard(updated, date, slot, chat.weekAnchor || date, curLang);
-      try { await tg.editMessage(env, chatId, messageId, txt, kb); } catch { await tg.sendMessage(env, chatId, txt, { reply_markup: kb }); }
-      const faces = { 1: '😞', 2: '😐', 3: '😋' };
-      await answer({ text: t(curLang, 'rated', { face: faces[value], v: String(value) }) });
+      try { await tg.editMessage(env, chatId, messageId, txt, kb); } catch { /* rating-grid message can't host detail keyboard — ignore */ }
+      await answer({ text: t(curLang, 'rated', { face: voteFace(value), v: String(value) }) });
     } catch (e) {
       await answer({ text: e.message.slice(0, 200), show_alert: true });
     }
