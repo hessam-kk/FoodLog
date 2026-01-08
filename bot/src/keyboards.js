@@ -1,4 +1,4 @@
-import { weekDates, addDays, slotIcon, foodEmoji, todayStr } from './util.js';
+import { weekDates, addDays, slotIcon, foodEmoji, todayStr, voteFace } from './util.js';
 import { t } from './i18n.js';
 
 /** Main week grid: nav row + 7 rows of [day | lunch | dinner] + footer row — 3 columns */
@@ -97,7 +97,7 @@ export function slotKeyboard(family, date, slot, anchor, lang = 'fa') {
 
 /** 0–10 rating grid for a single food */
 export function ratingGridKeyboard(date, slot, foodId) {
-  const mk = (n) => ({ text: String(n), callback_data: `v:${date}:${slot}:${foodId}:${n}` });
+  const mk = (n) => ({ text: `${voteFace(n)} ${n}`, callback_data: `v:${date}:${slot}:${foodId}:${n}` });
   const row0to5 = [0, 1, 2, 3, 4, 5].map(mk);
   const row6to10 = [6, 7, 8, 9, 10].map(mk);
   return { inline_keyboard: [row0to5, row6to10] };
