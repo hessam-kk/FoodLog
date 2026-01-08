@@ -368,15 +368,32 @@ function monthDates(anchor) {
   return Array.from({ length: last }, (_, i) => `${anchor.slice(0, 8)}${String(i + 1).padStart(2, '0')}`);
 }
 
+function yearDates(anchor) {
+  const y = Number(anchor.slice(0, 4));
+  const dates = [];
+  for (let m = 1; m <= 12; m++) {
+    const mm = String(m).padStart(2, '0');
+    const last = new Date(y, m, 0).getDate();
+    for (let d = 1; d <= last; d++) dates.push(`${y}-${mm}-${String(d).padStart(2, '0')}`);
+  }
+  return dates;
+}
+
+function shiftYear(anchor, delta) {
+  const [y, m, d] = anchor.split('-').map(Number);
+  return toStr(new Date(y + delta, m - 1, d));
+}
+
 // Scores are on a 0–10 scale. Faces map proportionally to the old 1–3 buckets:
 // 0–2.5 😞 (old 1), 2.5–7.5 😐 (old 2), 7.5+ 😋 (old 3).
 function voteFace(avg) {
   return avg >= 7.5 ? '😋' : avg >= 2.5 ? '😐' : '😞';
 }
 
-// Finer 6-step face scale used by the rating slider — 🤮 reserved for 0.
-const SLIDER_FACES = ['🤮', '😞', '😟', '😐', '🙂', '😋'];
+// Finer face scale used by the rating slider — 🤮 reserved for 0, 🤩 only for a perfect 10.
+const SLIDER_FACES = ['🤮', '😞', '😟', '😐', '🙂', '😋', '🤩'];
 function sliderFace(v) {
+  if (v >= 10) return SLIDER_FACES[6];
   return SLIDER_FACES[Math.max(0, Math.min(5, Math.round(v / 2)))];
 }
 
@@ -691,7 +708,7 @@ function trendHtml(dates) {
         avg: dayRating(date),
       });
     }
-  } else {
+  } else if (statsMode === 'month') {
     for (let i = 0; i < dates.length; i += 7) {
       const chunk = dates.slice(i, i + 7);
       let sum = 0, count = 0;
@@ -701,6 +718,21 @@ function trendHtml(dates) {
       }
       columns.push({
         label: `${FMT.dayNum.format(parseDate(chunk[0]))}–${FMT.dayNum.format(parseDate(chunk[chunk.length - 1]))}`,
+        avg: count ? sum / count : null,
+      });
+    }
+  } else {
+    // Year — one column per calendar month
+    const monthFmt = new Intl.DateTimeFormat(lang === 'fa' ? 'fa-IR' : 'en', { month: 'narrow' });
+    for (let m = 1; m <= 12; m++) {
+      let sum = 0, count = 0;
+      for (const date of dates) {
+        if (Number(date.slice(5, 7)) !== m) continue;
+        const avg = dayRating(date);
+        if (avg != null) { sum += avg; count++; }
+      }
+      columns.push({
+        label: monthFmt.format(parseDate(`${dates[0].slice(0, 4)}-${String(m).padStart(2, '0')}-15`)),
         avg: count ? sum / count : null,
       });
     }
@@ -889,23 +921,30 @@ function suggestionsHtml() {
 }
 
 function viewStats() {
-  const dates = statsMode === 'week' ? weekDates(nav.stats) : monthDates(nav.stats);
+  const dates = statsMode === 'week' ? weekDates(nav.stats)
+    : statsMode === 'month' ? monthDates(nav.stats)
+    : yearDates(nav.stats);
   const stats = statsFor(dates);
   const today = todayStr();
   const isCurrent = dates.includes(today);
   const daysSoFar = isCurrent ? dates.filter((d) => d <= today).length : dates.length;
   const title = statsMode === 'week'
     ? (isCurrent ? t('thisWeek') : t('weekOf', { range: FMT.shortDate.format(parseDate(dates[0])) }))
-    : FMT.monthYear.format(parseDate(nav.stats));
+    : statsMode === 'month'
+    ? FMT.monthYear.format(parseDate(nav.stats))
+    : (lang === 'fa' ? num(Number(nav.stats.slice(0, 4))) : nav.stats.slice(0, 4));
   const sub = statsMode === 'week'
     ? `${FMT.shortDate.format(parseDate(dates[0]))} – ${FMT.shortDate.format(parseDate(dates[6]))}`
-    : (isCurrent ? t('stats.thisMonth') : t('stats.days', { n: lang === 'fa' ? num(dates.length) : dates.length }));
+    : (isCurrent
+      ? t(statsMode === 'month' ? 'stats.thisMonth' : 'stats.thisYear')
+      : t('stats.days', { n: lang === 'fa' ? num(dates.length) : dates.length }));
   const mealsTotal = stats.dinners + stats.lunches;
 
   return `
     <div class="seg">
       <button class="seg-btn ${statsMode === 'week' ? 'on' : ''}" data-act="stats-mode" data-mode="week">${t('stats.week')}</button>
       <button class="seg-btn ${statsMode === 'month' ? 'on' : ''}" data-act="stats-mode" data-mode="month">${t('stats.month')}</button>
+      <button class="seg-btn ${statsMode === 'year' ? 'on' : ''}" data-act="stats-mode" data-mode="year">${t('stats.year')}</button>
     </div>
     ${rangeNavHtml(title, sub, 'prev-range', 'next-range', statsMode === 'week' && !isCurrent)}
     <div class="stat-grid">
@@ -1486,7 +1525,6 @@ function rateSheetHtml() {
         <div class="vs-faces" aria-hidden="true">
           ${SLIDER_FACES.map((f) => `<span class="vs-face${myVote != null && SLIDER_FACES.indexOf(sliderFace(myVote)) === SLIDER_FACES.indexOf(f) ? ' on' : ''}">${f}</span>`).join('')}
         </div>
-        <div class="vs-scale"><span>${SLIDER_FACES[0]} ${lang === 'fa' ? '۰' : '0'}</span><span>${SLIDER_FACES[2]} ${lang === 'fa' ? '۵' : '5'}</span><span>🤩 ${lang === 'fa' ? '۱۰' : '10'}</span></div>
       </div>
     </div>
     <div class="sheet-actions">
@@ -1862,7 +1900,7 @@ document.addEventListener('input', (e) => {
     const v = Number(tEl.value);
     const label = document.getElementById('vs-value');
     if (label) label.textContent = `${sliderFace(v)} ${lang === 'fa' ? num(v) : v}`;
-    const idx = Math.max(0, Math.min(5, Math.round(v / 2)));
+    const idx = v >= 10 ? 6 : Math.max(0, Math.min(5, Math.round(v / 2)));
     document.querySelectorAll('.vs-face').forEach((el, i) => el.classList.toggle('on', i === idx));
   }
 });
