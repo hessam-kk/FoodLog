@@ -384,10 +384,17 @@ function shiftYear(anchor, delta) {
   return toStr(new Date(y + delta, m - 1, d));
 }
 
-// Scores are on a 0–10 scale. Faces map proportionally to the old 1–3 buckets:
-// 0–2.5 😞 (old 1), 2.5–7.5 😐 (old 2), 7.5+ 😋 (old 3).
+// Scores are on a 0–10 scale. Faces use the same vocabulary as the rating
+// slider so every integer vote looks identical everywhere (list, hero, chips).
 function voteFace(avg) {
-  return avg >= 7.5 ? '😋' : avg >= 2.5 ? '😐' : '😞';
+  if (avg == null) return '';
+  if (avg >= 10) return '🤩';
+  if (avg >= 8.5) return '😋';
+  if (avg >= 6.5) return '🙂';
+  if (avg >= 4.5) return '😐';
+  if (avg >= 2.5) return '😟';
+  if (avg >= 0.5) return '😞';
+  return '🤮';
 }
 
 // Finer face scale used by the rating slider — 🤮 reserved for 0, 🤩 only for a perfect 10.
@@ -551,7 +558,7 @@ function foodVotesFor(date, slot, foodId) {
 }
 
 function scoreBadge(avg) {
-  const cls = avg >= 2.5 ? 'f3' : avg >= 1.5 ? 'f2' : 'f1'; // fallback when color-mix unsupported
+  const cls = avg >= 6.5 ? 'f3' : avg >= 3.5 ? 'f2' : 'f1'; // fallback when color-mix unsupported
   return `<span class="chip-score grad ${cls}" style="${scoreGrad(avg)}">${voteFace(avg)} ${fmt1(avg)}</span>`;
 }
 
@@ -1509,7 +1516,7 @@ function rateSheetHtml() {
                 <span class="member-avatar" style="--member-color:${esc(m.color)}">${m.emoji}</span>
                 <span class="rm-name">${esc(m.name)}${m.id === meId ? '<span class="you-pill">You</span>' : ''}</span>
                 ${v != null
-                  ? `<span class="rate-m-face f${voteFace(v) === '😋' ? 3 : voteFace(v) === '😐' ? 2 : 1}">${voteFace(v)} ${lang === 'fa' ? num(v) : v}</span>`
+                  ? `<span class="rate-m-face f${v >= 6.5 ? 3 : v >= 3.5 ? 2 : 1}">${voteFace(v)} ${lang === 'fa' ? num(v) : v}</span>`
                   : `<span class="rate-m-none">${t('rate.notYet')}</span>`}
               </div>`;
           }).join('')}
