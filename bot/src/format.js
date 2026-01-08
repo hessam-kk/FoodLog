@@ -90,7 +90,7 @@ export function slotDetailText(family, date, slot, memberId, lang = 'fa') {
     if (Object.keys(votes).length) {
       const details = Object.entries(votes).map(([mid, val]) => {
         const mm = family.members.find((x) => x.id === mid);
-        const face = val === 1 ? '😞' : val === 2 ? '😐' : '😋';
+        const face = voteFace(val);
         const who = mm ? `${mm.emoji} ${htmlEsc(mm.name)}` : htmlEsc(mid.slice(0, 6));
         const you = mid === memberId ? (lang === 'fa' ? ' <i>(شما)</i>' : ' <i>(you)</i>') : '';
         return `${who}: ${face}${you}`;
