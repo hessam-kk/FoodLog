@@ -1,4 +1,4 @@
-import { weekDates, addDays, slotIcon, foodEmoji, todayStr, voteFace } from './util.js';
+import { weekDates, addDays, slotIcon, foodEmoji, todayStr, voteFace, foodAvg } from './util.js';
 import { t } from './i18n.js';
 
 /** Main week grid: nav row + 7 rows of [day | lunch | dinner] + footer row — 3 columns */
@@ -16,6 +16,28 @@ export function weekKeyboard(family, anchor, lang = 'fa') {
     { text: t(lang, 'next'), callback_data: `nav:${nextAnchor}` },
   ]);
 
+  // Cell label: leading emoji is the food's average-score face when rated,
+  // falling back to the food-category emoji when it has no votes yet.
+  const cellText = (d, slot) => {
+    const meal = (family.meals[d] || {})[slot];
+    const icon = slotIcon(slot);
+    if (!meal || !meal.items.length) return `${icon} ${t(lang, 'empty')}`;
+    const parts = meal.items.slice(0, 2).map((it) => {
+      const av = foodAvg(family, d, slot, it.id);
+      return `${av != null ? voteFace(av) : foodEmoji(it.name)} ${it.name}`;
+    });
+    let body;
+    if (meal.items.length === 1) {
+      body = parts[0];
+    } else {
+      const joined = parts.join(' + ');
+      body = joined.length > 24
+        ? (lang === 'fa' ? `${meal.items.length} غذا` : `${meal.items.length} foods`)
+        : joined;
+    }
+    return `${icon} ${body}`.slice(0, 30);
+  };
+
   // Per-day rows — 3 columns: [day] [lunch foods] [dinner foods]
   for (const d of dates) {
     const isToday = d === today;
@@ -25,39 +47,10 @@ export function weekKeyboard(family, anchor, lang = 'fa') {
     const dayNum = new Intl.DateTimeFormat(locale, { day: 'numeric' }).format(new Date(d + 'T12:00:00'));
     const dayText = `${dow} ${dayNum}${isToday ? ' ●' : ''}`.slice(0, 14);
 
-    // lunch cell
-    const lunchMeal = (family.meals[d] || {}).lunch;
-    let lunchText;
-    if (!lunchMeal || !lunchMeal.items.length) {
-      lunchText = `${slotIcon('lunch')} ${t(lang, 'empty')}`;
-    } else if (lunchMeal.items.length === 1) {
-      const it = lunchMeal.items[0];
-      lunchText = `${slotIcon('lunch')} ${foodEmoji(it.name)} ${it.name}`.slice(0, 26);
-    } else {
-      // show up to 2 food names joined, else count
-      const names = lunchMeal.items.slice(0, 2).map((it) => `${foodEmoji(it.name)} ${it.name}`).join(' + ');
-      lunchText = names.length > 24 ? `${slotIcon('lunch')} ${lunchMeal.items.length} غذا` : `${slotIcon('lunch')} ${names}`;
-      if (lang === 'en' && lunchMeal.items.length > 1 && names.length > 24) lunchText = `${slotIcon('lunch')} ${lunchMeal.items.length} foods`;
-    }
-
-    // dinner cell
-    const dinnerMeal = (family.meals[d] || {}).dinner;
-    let dinnerText;
-    if (!dinnerMeal || !dinnerMeal.items.length) {
-      dinnerText = `${slotIcon('dinner')} ${t(lang, 'empty')}`;
-    } else if (dinnerMeal.items.length === 1) {
-      const it = dinnerMeal.items[0];
-      dinnerText = `${slotIcon('dinner')} ${foodEmoji(it.name)} ${it.name}`.slice(0, 26);
-    } else {
-      const names = dinnerMeal.items.slice(0, 2).map((it) => `${foodEmoji(it.name)} ${it.name}`).join(' + ');
-      dinnerText = names.length > 24 ? `${slotIcon('dinner')} ${dinnerMeal.items.length} غذا` : `${slotIcon('dinner')} ${names}`;
-      if (lang === 'en' && dinnerMeal.items.length > 1 && names.length > 24) dinnerText = `${slotIcon('dinner')} ${dinnerMeal.items.length} foods`;
-    }
-
     rows.push([
       { text: dayText, callback_data: 'noop' },
-      { text: lunchText, callback_data: `slot:${d}:lunch` },
-      { text: dinnerText, callback_data: `slot:${d}:dinner` },
+      { text: cellText(d, 'lunch'), callback_data: `slot:${d}:lunch` },
+      { text: cellText(d, 'dinner'), callback_data: `slot:${d}:dinner` },
     ]);
   }
 
