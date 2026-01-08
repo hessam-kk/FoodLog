@@ -3,7 +3,7 @@ import * as foodlog from './foodlog.js';
 import * as tg from './telegram.js';
 import { weekKeyboard, slotKeyboard, foodPickerKeyboard, whoamiKeyboard, foodsListKeyboard, langKeyboard, ratingGridKeyboard } from './keyboards.js';
 import { weekMessageText, slotDetailText, foodPickerIntro, helpText } from './format.js';
-import { todayStr, htmlEsc, dayLabel, slotLabel, slotIcon, foodEmoji, foodAvg } from './util.js';
+import { todayStr, htmlEsc, dayLabel, slotLabel, slotIcon, foodEmoji, foodAvg, voteFace } from './util.js';
 import { t, getLangFromChat, normalizeLang } from './i18n.js';
 
 // ---------- helpers ----------
