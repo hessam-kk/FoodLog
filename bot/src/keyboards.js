@@ -20,8 +20,7 @@ export function weekKeyboard(family, anchor, lang = 'fa') {
   // falling back to the food-category emoji when it has no votes yet.
   const cellText = (d, slot) => {
     const meal = (family.meals[d] || {})[slot];
-    const icon = slotIcon(slot);
-    if (!meal || !meal.items.length) return `${icon} ${t(lang, 'empty')}`;
+    if (!meal || !meal.items.length) return `${slotIcon(slot)} ${t(lang, 'empty')}`;
     const parts = meal.items.slice(0, 2).map((it) => {
       const av = foodAvg(family, d, slot, it.id);
       return `${av != null ? voteFace(av) : foodEmoji(it.name)} ${it.name}`;
@@ -31,11 +30,11 @@ export function weekKeyboard(family, anchor, lang = 'fa') {
       body = parts[0];
     } else {
       const joined = parts.join(' + ');
-      body = joined.length > 24
+      body = joined.length > 26
         ? (lang === 'fa' ? `${meal.items.length} غذا` : `${meal.items.length} foods`)
         : joined;
     }
-    return `${icon} ${body}`.slice(0, 30);
+    return body.slice(0, 30);
   };
 
   // Per-day rows — 3 columns: [day] [lunch foods] [dinner foods]
