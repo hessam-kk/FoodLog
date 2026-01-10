@@ -102,6 +102,11 @@ const D = {
     langPick: 'زبان را انتخاب کنید / Pick a language:',
     currentLangFa: 'فارسی',
     currentLangEn: 'English',
+    remind: '🍽️ <b>{slot} امروز</b> را ثبت کردید؟',
+    remindAdd: '➕ ثبت {slot}',
+    remindDone: '✅ ثبت کردم',
+    remindThanks: '👍 عالی! وعدهٔ {slot} امروز ثبت شد.',
+    remindThanksShort: 'عالی!',
   },
   en: {
     lunch: 'lunch',
@@ -201,6 +206,11 @@ const D = {
     langPick: 'Pick a language / زبان را انتخاب کنید:',
     currentLangFa: 'فارسی',
     currentLangEn: 'English',
+    remind: '🍽️ Did you log today\'s <b>{slot}</b>?',
+    remindAdd: '➕ Log {slot}',
+    remindDone: '✅ Logged',
+    remindThanks: '👍 Nice! Today\'s {slot} is logged.',
+    remindThanksShort: 'Nice!',
   },
 };
 
