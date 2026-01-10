@@ -16,6 +16,27 @@ export function todayStr() {
   return toStr(new Date());
 }
 
+/** Current clock parts in the Tehran (Asia/Tehran, fixed UTC+3:30) time zone. */
+export function tehranParts(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Tehran',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(now);
+  const get = (type) => Number((parts.find((p) => p.type === type) || {}).value);
+  return { year: get('year'), month: get('month'), day: get('day'), hour: get('hour'), minute: get('minute') };
+}
+
+/** Today's date string (YYYY-MM-DD) in Tehran time. */
+export function tehranTodayStr(now = new Date()) {
+  const { year, month, day } = tehranParts(now);
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
 export function addDays(s, n) {
   const d = parseDate(s);
   d.setDate(d.getDate() + n);
