@@ -8,8 +8,29 @@
 
 import { handleMessage, handleCallback } from './handlers.js';
 import { setWebhook, getMe } from './telegram.js';
+import { sendMealReminder } from './reminders.js';
+import { tehranParts } from './util.js';
+
+/** Map a scheduled run to the meal slot (Tehran time) — 15:00 lunch, 22:00 dinner. */
+function reminderSlot(event, now) {
+  // Prefer the cron expression that triggered the event (wrangler config is UTC).
+  const cron = (event && event.cron) || '';
+  if (cron.includes('30 11')) return 'lunch';   // 11:30 UTC = 15:00 Tehran
+  if (cron.includes('30 18')) return 'dinner';  // 18:30 UTC = 22:00 Tehran
+  // Fallback: derive from the actual Tehran clock (robust to cron changes / manual runs).
+  const { hour } = tehranParts(now);
+  if (hour === 15) return 'lunch';
+  if (hour === 22) return 'dinner';
+  return null;
+}
 
 export default {
+  async scheduled(event, env, ctx) {
+    const slot = reminderSlot(event, new Date());
+    if (!slot) return;
+    ctx.waitUntil(sendMealReminder(env, slot));
+  },
+
   async fetch(request, env) {
     const url = new URL(request.url);
 
