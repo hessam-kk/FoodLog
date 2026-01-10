@@ -68,3 +68,31 @@ export async function putSession(env, chatId, data) {
 export async function clearSession(env, chatId) {
   await kvDel(env, keySession(chatId));
 }
+
+// ---- chat enumeration (used by scheduled reminders) ----
+
+export async function listChats(env) {
+  const k = kv(env);
+  const out = [];
+  const push = (key, raw) => {
+    try {
+      out.push({ chatId: Number(key.slice('chat:'.length)), data: JSON.parse(raw) });
+    } catch { /* skip corrupt entries */ }
+  };
+  if (k) {
+    let cursor;
+    do {
+      const page = await k.list({ prefix: 'chat:', cursor });
+      for (const key of page.keys) {
+        const raw = await k.get(key.name);
+        if (raw != null) push(key.name, raw);
+      }
+      cursor = page.cursor;
+    } while (cursor);
+  } else {
+    for (const [key, raw] of MEM) {
+      if (key.startsWith('chat:')) push(key, raw);
+    }
+  }
+  return out;
+}
