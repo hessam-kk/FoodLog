@@ -14,6 +14,7 @@ A Telegram bot that talks to the FoodLog API (`src/worker.js`) and mirrors the w
 - **/foods** — lists food memory and lets you add a new food by just sending its name.
 - **/start CODE** — link this chat to a 6-char family code (also accepts a bare code). The linkage + week anchor + draft meal are stored per-chat in KV (falls back to in-memory when no KV).
 - **Other** — `/help`, `/week`, `/start`, bare-code linking, member-aware vote display (“you”), 8-foods-per-meal limit, and graceful API error messages.
+- **Meal reminders** — a scheduled (cron) handler checks the family API and asks linked chats to log today's lunch/dinner **only if the meal isn't already logged** (chats whose meal is already recorded are skipped silently). Lunch reminder at **15:00 Tehran**, dinner at **22:00 Tehran** (cron triggers run on UTC, so `30 11 * * *` / `30 18 * * *`). Each reminder has a **➕ Log …** button that jumps straight into the food picker for today, and a **✅ Logged** button to dismiss it. The Worker computes “today” and the slot in the `Asia/Tehran` time zone (fixed UTC+3:30).
 
 ## Layout
 
@@ -22,7 +23,8 @@ bot/
   wrangler.toml            Worker config (see KV setup below)
   .dev.vars.example        → copy to .dev.vars with BOT_TOKEN etc.
   src/
-    index.js               Fetch handler + webhook secret check
+    index.js               Fetch + scheduled (cron) handlers, webhook secret check
+    reminders.js           Sends lunch/dinner reminders to all linked chats
     handlers.js            Commands + callback router + slot/meal/vote flows
     keyboards.js           Dynamic inline_keyboard builders (week, detail, picker)
     format.js              HTML message builders (week text, slot detail, help)
@@ -112,6 +114,19 @@ GET https://foodlog-telegram-bot.YOUR.workers.dev/health
 - Empty slot → picker: toggle foods ✅, `➕ New food` (then type the name), `✅ Done`
 - Filled slot → tap 😞/😐/😋 under the food you want to rate (requires `/whoami`)
 - `◀ Prev` / `Next ▶` / `Today` edits the week in place
+
+## Reminders (cron)
+
+The Worker has a `scheduled` handler driven by cron triggers in `wrangler.jsonc`:
+
+- `30 11 * * *` — **lunch** reminder at 15:00 Tehran
+- `30 18 * * *` — **dinner** reminder at 22:00 Tehran
+
+It lists all `chat:*` keys from KV, skips chats that aren't linked to a family, loads each family once from the FoodLog API, and sends the reminder with an inline keyboard (`➕ Log` opens today's food picker, `✅ Logged` dismisses). Families whose meal for that slot is already logged get **no message** — one meal is shared per family, so there's nothing left to log. To run locally with `wrangler dev`, add `--test-scheduled` and trigger the handler with:
+
+```bash
+curl "http://127.0.0.1:8788/__scheduled?cron=30+11+*+*+*"
+```
 
 ## Local testing without a public URL
 

@@ -551,6 +551,14 @@ export async function handleCallback(env, cb) {
     return;
   }
 
+  if (data.startsWith('remind:done:')) {
+    const slot = data.slice('remind:done:'.length);
+    const curLang = langOf(chatForLang);
+    try { await tg.editMessage(env, chatId, messageId, t(curLang, 'remindThanks', { slot: slotLabel(slot, curLang) }), undefined); } catch {}
+    await answer({ text: t(curLang, 'remindThanksShort') });
+    return;
+  }
+
   if (data.startsWith('who:')) {
     const memberId = data.slice(4);
     const res = await ensureFamily(env, chatId);
