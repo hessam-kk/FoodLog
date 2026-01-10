@@ -518,9 +518,14 @@ async function mutate(path, method, body, optimisticFn) {
     } catch { family = snapshot; }
   }
   try {
-    family = await api(`/${family.id}${path}`, { method, body });
+    const fresh = await api(`/${family.id}${path}`, { method, body });
     lastFetch = Date.now();
-    render();
+    // The optimistic render already painted this change; skip the second
+    // full-DOM repaint unless the server brought actual differences
+    // (e.g. a family member acted meanwhile).
+    const changed = JSON.stringify(fresh) !== JSON.stringify(family);
+    family = fresh;
+    if (changed || !optimisticFn) render();
     return true;
   } catch (err) {
     toast(t('err.prefix') + err.message);
