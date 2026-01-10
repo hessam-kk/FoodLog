@@ -1,4 +1,4 @@
-import { weekDates, addDays, slotIcon, foodEmoji, todayStr, voteFace, foodAvg } from './util.js';
+import { weekDates, addDays, slotIcon, foodEmoji, todayStr, voteFace, foodAvg, slotLabel } from './util.js';
 import { t } from './i18n.js';
 
 /** Main week grid: nav row + 7 rows of [day | lunch | dinner] + footer row — 3 columns */
@@ -172,6 +172,19 @@ export function langKeyboard() {
       [
         { text: 'فارسی', callback_data: 'lang:fa' },
         { text: 'English', callback_data: 'lang:en' },
+      ],
+    ],
+  };
+}
+
+/** Reminder card — nudge a chat to log today's lunch/dinner. */
+export function remindKeyboard(date, slot, lang = 'fa') {
+  const label = slotLabel(slot, lang);
+  return {
+    inline_keyboard: [
+      [
+        { text: t(lang, 'remindAdd', { slot: label }), callback_data: `add:${date}:${slot}` },
+        { text: t(lang, 'remindDone'), callback_data: `remind:done:${slot}` },
       ],
     ],
   };
