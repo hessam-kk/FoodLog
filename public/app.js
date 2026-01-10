@@ -770,10 +770,7 @@ function topFoodsHtml(stats) {
           <div class="bar-main">
             <div class="bar-top">
               <span class="bar-name">${esc(f.name)}</span>
-              <span style="display:flex;align-items:center;gap:6px">
-                ${f.voteCount ? scoreBadge(f.voteSum / f.voteCount) : ''}
-                <span class="bar-count">×${lang === 'fa' ? num(f.count) : f.count}</span>
-              </span>
+              <span class="bar-count">×${lang === 'fa' ? num(f.count) : f.count}</span>
             </div>
             <div class="bar-track"><div class="bar-fill" style="width:${(f.count / max) * 100}%"></div></div>
           </div>
@@ -781,21 +778,31 @@ function topFoodsHtml(stats) {
     </div>`;
 }
 
+// Favorite foods as a bar graph — each bar's length (and tint) is the food's score.
 function favoritesHtml(stats) {
   if (!stats.favorites.length) {
     return `<div class="empty-note">${t('stats.emptyVotes')}</div>`;
   }
   return `
-    <div class="member-rows">
-      ${stats.favorites.map((f) => `
-        <div class="member-row">
-          <span class="food-emoji">${foodEmoji(f.name)}</span>
-          <div class="member-main">
-            <div class="member-name">${esc(f.name)}</div>
-            <div class="member-stats">${t('stats.favSub', { votes: f.voteCount, count: f.count })}</div>
-          </div>
-          ${scoreBadge(f.voteSum / f.voteCount)}
-        </div>`).join('')}
+    <div class="bar-list">
+      ${stats.favorites.map((f, i) => {
+        const avg = f.voteSum / f.voteCount;
+        return `
+          <div class="bar-row">
+            <span class="bar-rank">${lang === 'fa' ? num(i + 1) : i + 1}</span>
+            <span class="bar-emoji">${foodEmoji(f.name)}</span>
+            <div class="bar-main">
+              <div class="bar-top">
+                <span class="bar-name">${esc(f.name)}</span>
+                <span style="display:flex;align-items:center;gap:6px">
+                  ${scoreBadge(avg)}
+                  <span class="bar-count">${t('stats.votes', { n: lang === 'fa' ? num(f.voteCount) : f.voteCount })}</span>
+                </span>
+              </div>
+              <div class="bar-track"><div class="bar-fill grad" style="width:${(avg / 10) * 100}%;${scoreGrad(avg)}"></div></div>
+            </div>
+          </div>`;
+      }).join('')}
     </div>`;
 }
 
