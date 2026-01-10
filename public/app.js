@@ -99,6 +99,7 @@ const I18N = {
     'fam.toastDeleted': 'Family deleted',
     'stats.week': 'Week', 'stats.month': 'Month', 'stats.year': 'Year',
     'stats.thisMonth': 'So far this month', 'stats.thisYear': 'So far this year', 'stats.days': '{n} days',
+    'stats.perDay': 'Per day', 'stats.perWeek': 'Per week',
     'stats.foodRating': 'Food rating',
     'stats.ratingSub': (p) => `${p.votes} food vote${p.votes === 1 ? '' : 's'} across ${p.meals} meal${p.meals === 1 ? '' : 's'}`,
     'stats.noVotes': 'No votes yet — tap a food to rate it',
@@ -223,6 +224,7 @@ const I18N = {
     'fam.toastDeleted': 'خانواده حذف شد',
     'stats.week': 'هفته', 'stats.month': 'ماه', 'stats.year': 'سال',
     'stats.thisMonth': 'تا امروزِ این ماه', 'stats.thisYear': 'تا امروزِ امسال', 'stats.days': '{n} روز',
+    'stats.perDay': 'روزانه', 'stats.perWeek': 'هفتگی',
     'stats.foodRating': 'امتیاز غذاها',
     'stats.ratingSub': (p) => `${num(p.votes)} رأی در ${num(p.meals)} وعده`,
     'stats.noVotes': 'هنوز رأیی نیست — روی یک غذا بزنید و امتیاز بدهید',
@@ -711,16 +713,17 @@ function dayRating(date) {
   return count ? sum / count : null;
 }
 
-function trendHtml(dates) {
+// granularity: 'day' (one col per date) | 'weekChunk' (7-day cols) | 'month' (12 cols)
+function buildTrendColumns(granularity, dates) {
   const columns = [];
-  if (statsMode === 'week') {
+  if (granularity === 'day') {
     for (const date of dates) {
       columns.push({
         label: FMT.dowNarrow.format(parseDate(date)),
         avg: dayRating(date),
       });
     }
-  } else if (statsMode === 'month') {
+  } else if (granularity === 'weekChunk') {
     for (let i = 0; i < dates.length; i += 7) {
       const chunk = dates.slice(i, i + 7);
       let sum = 0, count = 0;
@@ -749,8 +752,12 @@ function trendHtml(dates) {
       });
     }
   }
+  return columns;
+}
+
+function trendChartHtml(columns, dense = false) {
   return `
-    <div class="trend">
+    <div class="trend${dense ? ' dense' : ''}">
       <div class="trend-grid" aria-hidden="true"><i></i><i></i><i></i></div>
       ${columns.map((c) => `
         <div class="trend-col">
@@ -759,6 +766,19 @@ function trendHtml(dates) {
           <span class="trend-day">${esc(c.label)}</span>
         </div>`).join('')}
     </div>`;
+}
+
+function trendHtml(dates) {
+  if (statsMode === 'month') {
+    // Both views: per-day detail plus per-week summary.
+    return `
+      <div class="trend-sub">${t('stats.perDay')}</div>
+      ${trendChartHtml(buildTrendColumns('day', dates), true)}
+      <div class="trend-sub">${t('stats.perWeek')}</div>
+      ${trendChartHtml(buildTrendColumns('weekChunk', dates))}`;
+  }
+  const granularity = statsMode === 'year' ? 'month' : 'day';
+  return trendChartHtml(buildTrendColumns(granularity, dates));
 }
 
 function topFoodsHtml(stats) {
