@@ -1219,6 +1219,29 @@ button.food-chip:active { transform: scale(0.94); }
   text-transform: uppercase;
 }
 
+/* sub-heading between the two month-mode trend charts */
+.trend-sub {
+  margin-top: 14px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ink-2);
+}
+
+.card .trend-sub:first-child { margin-top: 0; }
+
+/* denser bars when a chart has ~30 columns (month per-day view) */
+.trend.dense { gap: 2px; }
+
+.trend.dense .trend-bar {
+  max-width: 16px;
+  border-radius: 4px 4px 2px 2px;
+}
+
+.trend.dense .trend-val,
+.trend.dense .trend-day {
+  font-size: 8.5px;
+}
+
 .member-rows {
   display: flex;
   flex-direction: column;
