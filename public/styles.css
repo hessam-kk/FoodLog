@@ -1197,6 +1197,15 @@ button.food-chip:active { transform: scale(0.94); }
 
 .trend-bar.zero { background: var(--track); opacity: 1; }
 
+.trend-bar.grad,
+.bar-fill.grad {
+  --sc: color-mix(in srgb, var(--ca), var(--cb) var(--cp, 50%));
+}
+
+.bar-fill.grad {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--sc) 72%, #fff), var(--sc));
+}
+
 .trend-bar.grad {
   background: linear-gradient(160deg,
     color-mix(in srgb, var(--sc) 72%, #fff),
