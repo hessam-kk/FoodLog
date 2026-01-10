@@ -20,5 +20,13 @@
       "service": "foodlog"
     }
   ],
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  "triggers": {
+    "crons": [
+      // 15:00 Tehran (11:30 UTC) — lunch reminder
+      "30 11 * * *",
+      // 22:00 Tehran (18:30 UTC) — dinner reminder
+      "30 18 * * *"
+    ]
+  }
 }
