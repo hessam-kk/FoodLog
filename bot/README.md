@@ -18,6 +18,7 @@ A Telegram bot that talks to the FoodLog API (`src/worker.js`) and mirrors the w
   - **Meal not logged** → ask to log it: **➕ Log …** jumps into today's food picker, **✅ Logged** dismisses.
   - **Meal logged but this member hasn't voted yet** → ask that member to rate the foods (each food opens the 0–10 rating grid; adds a `/whoami` hint if no member is set). Votes are per member, so each family member is nudged individually.
   - **Meal logged and this member already voted** → skipped silently.
+  - When a linked chat logs a meal (via ➕ Log → picker → ✅ Done), **every reminder card** in the family for that date+slot is **edited in place** from the log-ask into the vote-ask (“now rate it”) with a button per food — both the chat that logged and the other members, since they all now have a logged meal to rate. Each chat's card reads in that chat's language.
 
 ## Layout
 
