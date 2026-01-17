@@ -1,10 +1,11 @@
-import { getChat, putChat, updateChat, getSession, putSession, clearSession } from './store.js';
+import { getChat, putChat, updateChat, getSession, putSession, clearSession, getReminder, clearReminder, listChatsByFamily } from './store.js';
 import * as foodlog from './foodlog.js';
 import * as tg from './telegram.js';
 import { weekKeyboard, slotKeyboard, foodPickerKeyboard, whoamiKeyboard, foodsListKeyboard, langKeyboard, ratingGridKeyboard } from './keyboards.js';
 import { weekMessageText, slotDetailText, foodPickerIntro, helpText } from './format.js';
 import { todayStr, htmlEsc, dayLabel, slotLabel, slotIcon, foodEmoji, foodAvg, voteFace } from './util.js';
 import { t, getLangFromChat, normalizeLang } from './i18n.js';
+import { votePrompt } from './reminders.js';
 
 // ---------- helpers ----------
 
@@ -418,6 +419,22 @@ export async function handleCallback(env, cb) {
         await clearSession(env, chatId);
         const confirmText = t(curLang, 'saved', { date, slot: slot === 'lunch' ? t(curLang,'lunch') : t(curLang,'dinner'), items: items.map((it) => htmlEsc(it.name)).join(' + ') });
         try { await tg.editMessage(env, chatId, messageId, confirmText, undefined); } catch { await tg.sendMessage(env, chatId, confirmText); }
+        // The meal is now logged, so any reminder card for this date+slot in this family's
+        // chats should switch from the "did you log it?" ask to the vote branch ("now rate it").
+        // The chat that logged switches its own card; the other members' cards switch too,
+        // since they now have a food for that meal and just need to vote.
+        try {
+          const familyChats = await listChatsByFamily(env, res.chat.familyCode);
+          for (const other of familyChats) {
+            let rem;
+            try { rem = await getReminder(env, other.chatId); } catch {}
+            if (!rem || rem.date !== date || rem.slot !== slot) continue;
+            const otherData = other.data || {};
+            const vp = votePrompt(updated, date, slot, otherData.memberId, getLangFromChat(otherData));
+            try { await tg.editMessage(env, other.chatId, rem.messageId, vp.text, vp.keyboard); } catch {}
+            try { await clearReminder(env, other.chatId); } catch {}
+          }
+        } catch (e) { /* reminder bookkeeping is best-effort */ }
         await answer({ text: curLang === 'fa' ? 'ذخیره شد ✓' : 'Meal saved ✓' });
         const txt = slotDetailText(updated, date, slot, res.chat.memberId, curLang);
         const kb = slotKeyboard(updated, date, slot, session.anchor || date, curLang);
