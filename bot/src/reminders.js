@@ -10,12 +10,27 @@
  * Votes are per member: every family member rates the meal's foods individually.
  */
 
-import { listChats } from './store.js';
+import { listChats, putReminder } from './store.js';
 import * as tg from './telegram.js';
 import * as foodlog from './foodlog.js';
 import { remindKeyboard, voteRemindKeyboard } from './keyboards.js';
 import { t, getLangFromChat } from './i18n.js';
 import { tehranTodayStr, slotLabel, foodEmoji, htmlEsc } from './util.js';
+
+/**
+ * Build the "meal logged, now rate it" prompt for a member.
+ * Shared between the scheduled reminder's vote branch and the picker's
+ * "edit the log-nudge into the vote ask" flow.
+ */
+export function votePrompt(family, date, slot, memberId, lang) {
+  const meal = (family.meals[date] || {})[slot];
+  const items = (meal && meal.items) || [];
+  const label = slotLabel(slot, lang);
+  const foodsText = items.map((it) => `${foodEmoji(it.name)} ${htmlEsc(it.name)}`).join(' + ');
+  let txt = t(lang, 'remindVote', { slot: label, foods: foodsText });
+  if (!memberId) txt += t(lang, 'remindVoteWho');
+  return { text: txt, keyboard: voteRemindKeyboard(date, slot, items) };
+}
 
 export async function sendMealReminder(env, slot) {
   const date = tehranTodayStr();
@@ -47,9 +62,14 @@ export async function sendMealReminder(env, slot) {
     // Meal not logged yet — nudge to log it.
     if (!meal || !meal.items.length) {
       try {
-        await tg.sendMessage(env, chatId, t(lang, 'remind', { slot: label }), {
+        const sentMsg = await tg.sendMessage(env, chatId, t(lang, 'remind', { slot: label }), {
           reply_markup: remindKeyboard(date, slot, lang),
         });
+        // Remember the card so that if this chat later logs the meal, we can
+        // edit this very message over to the vote branch ("now rate it").
+        if (sentMsg && sentMsg.message_id) {
+          await putReminder(env, chatId, { messageId: sentMsg.message_id, date, slot }).catch(() => {});
+        }
         sent++;
       } catch (e) {
         console.error(`reminder ${slot} → chat ${chatId} failed`, e && e.message ? e.message : e);
@@ -66,11 +86,9 @@ export async function sendMealReminder(env, slot) {
       continue;
     }
 
-    const foodsText = meal.items.map((it) => `${foodEmoji(it.name)} ${htmlEsc(it.name)}`).join(' + ');
-    let txt = t(lang, 'remindVote', { slot: label, foods: foodsText });
-    if (!memberId) txt += t(lang, 'remindVoteWho');
     try {
-      await tg.sendMessage(env, chatId, txt, { reply_markup: voteRemindKeyboard(date, slot, meal.items) });
+      const vp = votePrompt(family, date, slot, memberId, lang);
+      await tg.sendMessage(env, chatId, vp.text, { reply_markup: vp.keyboard });
       voteSent++;
     } catch (e) {
       console.error(`vote reminder ${slot} → chat ${chatId} failed`, e && e.message ? e.message : e);
