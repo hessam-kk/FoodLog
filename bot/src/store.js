@@ -14,6 +14,7 @@ function kv(env) {
 
 function keyChat(chatId) { return `chat:${chatId}`; }
 function keySession(chatId) { return `session:${chatId}`; }
+function keyReminder(chatId) { return `reminder:${chatId}`; }
 
 async function kvGet(env, key) {
   const k = kv(env);
@@ -69,9 +70,23 @@ export async function clearSession(env, chatId) {
   await kvDel(env, keySession(chatId));
 }
 
+// ---- active reminder card (so logging from a reminder can switch it to the vote branch) ----
+
+export async function getReminder(env, chatId) {
+  return (await kvGet(env, keyReminder(chatId))) || null;
+}
+
+export async function putReminder(env, chatId, data) {
+  await kvPut(env, keyReminder(chatId), data);
+}
+
+export async function clearReminder(env, chatId) {
+  await kvDel(env, keyReminder(chatId));
+}
+
 // ---- chat enumeration (used by scheduled reminders) ----
 
-export async function listChats(env) {
+async function enumerateChats(env) {
   const k = kv(env);
   const out = [];
   const push = (key, raw) => {
@@ -95,4 +110,13 @@ export async function listChats(env) {
     }
   }
   return out;
+}
+
+export async function listChats(env) {
+  return enumerateChats(env);
+}
+
+export async function listChatsByFamily(env, familyCode) {
+  const chats = await enumerateChats(env);
+  return chats.filter(({ data }) => data && data.familyCode === familyCode);
 }
