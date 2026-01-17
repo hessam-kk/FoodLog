@@ -144,34 +144,39 @@ export async function handleMessage(env, msg) {
   if (session && session.step === 'await_new_food_picker') {
     const name = text.trim();
     if (!name || name.startsWith('/')) {
-      await tg.sendMessage(env, chatId, t(lang, 'sendFoodName'));
+      // A command (like /cancel, /help, /start) or a bare `/` — exit the
+      // "new food" prompt and let the command handlers below take over,
+      // instead of trapping the user in the prompt forever.
+      await clearSession(env, chatId);
+      // fall through to command handling
+      session = null;
+    } else {
+      const res = await ensureFamily(env, chatId);
+      if (!res || !res.family) { await clearSession(env, chatId); return; }
+      const curLang = langOf(res.chat);
+      try {
+        const updated = await foodlog.addFood(env, res.chat.familyCode, name);
+        const created = updated.foods.find((f) => f.name.toLowerCase() === name.toLowerCase()) || updated.foods[0];
+        const newSelected = [...(session.selectedIds || [])];
+        if (created && !newSelected.includes(created.id)) {
+          if (newSelected.length >= 8) {
+            await tg.sendMessage(env, chatId, t(curLang, 'addedButFull', { name: htmlEsc(name) }));
+          } else {
+            newSelected.push(created.id);
+          }
+        }
+        const nextSession = { step: 'pick_foods', date: session.date, slot: session.slot, selectedIds: newSelected, page: session.page || 0, anchor: session.anchor };
+        await putSession(env, chatId, nextSession);
+        await tg.sendMessage(env, chatId, t(curLang, 'addedMemory', { name: htmlEsc(name) }));
+        const fam2 = updated;
+        const intro = foodPickerIntro(session.date, session.slot, fam2, curLang);
+        const kb = foodPickerKeyboard(fam2, nextSession, curLang);
+        await tg.sendMessage(env, chatId, intro, { reply_markup: kb });
+      } catch (e) {
+        await tg.sendMessage(env, chatId, `⚠️ ${htmlEsc(e.message)}`);
+      }
       return;
     }
-    const res = await ensureFamily(env, chatId);
-    if (!res || !res.family) { await clearSession(env, chatId); return; }
-    const curLang = langOf(res.chat);
-    try {
-      const updated = await foodlog.addFood(env, res.chat.familyCode, name);
-      const created = updated.foods.find((f) => f.name.toLowerCase() === name.toLowerCase()) || updated.foods[0];
-      const newSelected = [...(session.selectedIds || [])];
-      if (created && !newSelected.includes(created.id)) {
-        if (newSelected.length >= 8) {
-          await tg.sendMessage(env, chatId, t(curLang, 'addedButFull', { name: htmlEsc(name) }));
-        } else {
-          newSelected.push(created.id);
-        }
-      }
-      const nextSession = { step: 'pick_foods', date: session.date, slot: session.slot, selectedIds: newSelected, page: session.page || 0, anchor: session.anchor };
-      await putSession(env, chatId, nextSession);
-      await tg.sendMessage(env, chatId, t(curLang, 'addedMemory', { name: htmlEsc(name) }));
-      const fam2 = updated;
-      const intro = foodPickerIntro(session.date, session.slot, fam2, curLang);
-      const kb = foodPickerKeyboard(fam2, nextSession, curLang);
-      await tg.sendMessage(env, chatId, intro, { reply_markup: kb });
-    } catch (e) {
-      await tg.sendMessage(env, chatId, `⚠️ ${htmlEsc(e.message)}`);
-    }
-    return;
   }
 
   // Session: awaiting food name via /foods list
@@ -200,6 +205,12 @@ export async function handleMessage(env, msg) {
   }
 
   // ----- commands -----
+  if (text.startsWith('/cancel') || text === '✕ Cancel' || text.toLowerCase() === 'cancel') {
+    await clearSession(env, chatId);
+    await tg.sendMessage(env, chatId, t(lang, 'cancelled'));
+    return;
+  }
+
   if (text.startsWith('/start')) {
     const parts = text.split(/\s+/);
     const arg = (parts[1] || '').toUpperCase().trim();
