@@ -107,6 +107,8 @@ const D = {
     remindDone: '✅ ثبت کردم',
     remindThanks: '👍 عالی! وعدهٔ {slot} امروز ثبت شد.',
     remindThanksShort: 'عالی!',
+    remindVote: '🗳️ <b>{slot} امروز</b> ثبت شده، ولی هنوز امتیاز نداده‌اید:\n{foods}\n\nبرای امتیازدهی روی هر غذا بزنید.',
+    remindVoteWho: '\n\nبرای امتیازدهی اول <code>/whoami</code> را بزنید.',
   },
   en: {
     lunch: 'lunch',
@@ -211,6 +213,8 @@ const D = {
     remindDone: '✅ Logged',
     remindThanks: '👍 Nice! Today\'s {slot} is logged.',
     remindThanksShort: 'Nice!',
+    remindVote: '🗳️ Today\'s <b>{slot}</b> is logged, but you haven\'t rated it yet:\n{foods}\n\nTap a food to rate it.',
+    remindVoteWho: '\n\nTo rate, first pick who you are with <code>/whoami</code>.',
   },
 };
 
