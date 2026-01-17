@@ -189,3 +189,12 @@ export function remindKeyboard(date, slot, lang = 'fa') {
     ],
   };
 }
+
+/** Reminder card — nudge a chat to rate the foods of an already-logged meal. */
+export function voteRemindKeyboard(date, slot, foods) {
+  return {
+    inline_keyboard: foods.map((f) => [
+      { text: `🗳 ${f.name.slice(0, 24)}`, callback_data: `vr:${date}:${slot}:${f.id}` },
+    ]),
+  };
+}
