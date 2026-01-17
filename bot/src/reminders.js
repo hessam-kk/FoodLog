@@ -3,10 +3,11 @@
  * Invoked from the Worker's `scheduled` handler (cron triggers in wrangler.jsonc).
  * Dates/slots follow the Tehran (Asia/Tehran, UTC+3:30) time zone.
  *
- * Behavior per chat (meal state is shared per family, votes are per member):
+ * Behavior per chat:
  *   - Meal not logged yet            → ask to log it (➕ Log / ✅ Logged buttons).
- *   - Meal logged, member missed votes → ask to rate the unrated foods.
- *   - Meal logged, member rated all  → skip silently (nothing to do).
+ *   - Meal logged, member hasn't voted → ask that member to rate the foods.
+ *   - Meal logged, member voted      → skip silently (that member is done).
+ * Votes are per member: every family member rates the meal's foods individually.
  */
 
 import { listChats } from './store.js';
@@ -56,22 +57,20 @@ export async function sendMealReminder(env, slot) {
       continue;
     }
 
-    // Meal is logged — nudge to rate unless this member rated every food.
+    // Meal logged — nudge this member to rate unless they already voted.
     const memberId = data.memberId;
-    const unrated = meal.items.filter((it) => {
-      const foodVotes = ((family.foodVotes || {})[date] || {})[slot] || {};
-      return (foodVotes[it.id] || {})[memberId] == null;
-    });
-    if (!unrated.length) {
-      skipped++; // logged + fully rated — nothing to do
+    const votes = ((family.foodVotes || {})[date] || {})[slot] || {};
+    const voted = memberId != null && meal.items.some((it) => (votes[it.id] || {})[memberId] != null);
+    if (voted) {
+      skipped++; // this member already rated — no notification
       continue;
     }
 
-    const foodsText = unrated.map((it) => `${foodEmoji(it.name)} ${htmlEsc(it.name)}`).join(' + ');
+    const foodsText = meal.items.map((it) => `${foodEmoji(it.name)} ${htmlEsc(it.name)}`).join(' + ');
     let txt = t(lang, 'remindVote', { slot: label, foods: foodsText });
     if (!memberId) txt += t(lang, 'remindVoteWho');
     try {
-      await tg.sendMessage(env, chatId, txt, { reply_markup: voteRemindKeyboard(date, slot, unrated) });
+      await tg.sendMessage(env, chatId, txt, { reply_markup: voteRemindKeyboard(date, slot, meal.items) });
       voteSent++;
     } catch (e) {
       console.error(`vote reminder ${slot} → chat ${chatId} failed`, e && e.message ? e.message : e);
